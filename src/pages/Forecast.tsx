@@ -1,7 +1,7 @@
-import React, { useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { motion } from 'motion/react';
 import { cn, formatCurrency } from '../lib/utils';
-import { ResponsiveContainer, Tooltip, BarChart, Bar, XAxis, YAxis, CartesianGrid, Legend } from 'recharts';
+import { Tooltip, BarChart, Bar, XAxis, YAxis, CartesianGrid, Legend } from 'recharts';
 
 import { useBudget } from '../context/BudgetContext';
 
@@ -13,6 +13,34 @@ export const Forecast: React.FC = () => {
   const { transactions, savingsGoals, accountBalances, totalBalance, getCycleDates } = useBudget();
   const [showAllYear, setShowAllYear] = useState(false);
   const [filter, setFilter] = useState('all');
+  const [isChartReady, setIsChartReady] = useState(false);
+  const [chartWidth, setChartWidth] = useState(640);
+
+  useEffect(() => {
+    const id = window.requestAnimationFrame(() => setIsChartReady(true));
+    return () => {
+      window.cancelAnimationFrame(id);
+      setIsChartReady(false);
+    };
+  }, []);
+
+  useEffect(() => {
+    const updateWidth = () => {
+      const viewport = window.innerWidth || 1024;
+      const width = Math.max(320, Math.min(920, viewport - 80));
+      setChartWidth(width);
+    };
+
+    updateWidth();
+    window.addEventListener('resize', updateWidth);
+    return () => window.removeEventListener('resize', updateWidth);
+  }, []);
+
+  const barSize = useMemo(() => {
+    if (chartWidth < 420) return 14;
+    if (chartWidth < 620) return 18;
+    return 24;
+  }, [chartWidth]);
 
   const generateForecast = () => {
     const data = [];
@@ -104,60 +132,64 @@ export const Forecast: React.FC = () => {
       <div className="mb-12">
         <h3 className="text-2xl font-bold mb-6 px-2">מגמת צמיחה משוערת</h3>
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          <div className="lg:col-span-2 bg-surface-container-lowest p-8 rounded-xl shadow-[0_4px_24px_rgba(0,0,0,0.02)] border border-surface-container-low">
-            <div className="h-72 w-full">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={chartData} margin={{ top: 20, right: 0, left: 0, bottom: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--md-sys-color-surface-container-high)" />
-                  <XAxis 
-                    dataKey="month" 
-                    axisLine={false} 
-                    tickLine={false} 
-                    tick={{ fill: 'var(--md-sys-color-on-surface-variant)', fontSize: 12, fontWeight: 700 }}
-                    dy={10}
-                  />
-                  <YAxis hide domain={['auto', 'auto']} />
-                  <Tooltip 
-                    cursor={{ fill: 'var(--md-sys-color-surface-container-low)', opacity: 0.4 }}
-                    content={({ active, payload }) => {
-                      if (active && payload && payload.length) {
-                        const data = payload[0].payload;
-                        return (
-                          <div className="bg-surface-container-highest p-3 rounded-xl shadow-xl border border-surface-container-low text-right">
-                            <p className="text-xs font-bold text-on-surface mb-2">{data.fullMonth}</p>
-                            <div className="space-y-1">
-                              <p className="text-[10px] font-bold flex justify-between gap-4" style={{ color: '#FFB74D' }}>
-                                <span>{formatCurrency(data.checking)}</span>
-                                <span>נכסים:</span>
-                              </p>
-                              <p className="text-[10px] font-bold flex justify-between gap-4" style={{ color: '#64B5F6' }}>
-                                <span>{formatCurrency(data.savings)}</span>
-                                <span>חיסכון:</span>
-                              </p>
-                              <div className="pt-1 mt-1 border-t border-on-surface/10">
-                                <p className="text-xs font-black text-on-surface flex justify-between gap-4">
-                                  <span>{formatCurrency(data.total)}</span>
-                                  <span>סה״כ:</span>
+          <div className="lg:col-span-2 min-w-0 bg-surface-container-lowest p-8 rounded-xl shadow-[0_4px_24px_rgba(0,0,0,0.02)] border border-surface-container-low">
+            <div className="h-72 w-full min-h-[288px] min-w-0">
+              {isChartReady ? (
+                <div className="h-full w-full overflow-x-auto overflow-y-hidden">
+                  <BarChart width={chartWidth} height={288} data={chartData} margin={{ top: 20, right: 0, left: 0, bottom: 0 }}>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--md-sys-color-surface-container-high)" />
+                    <XAxis 
+                      dataKey="month" 
+                      axisLine={false} 
+                      tickLine={false} 
+                      tick={{ fill: 'var(--md-sys-color-on-surface-variant)', fontSize: 12, fontWeight: 700 }}
+                      dy={10}
+                    />
+                    <YAxis hide domain={['auto', 'auto']} />
+                    <Tooltip 
+                      cursor={{ fill: 'var(--md-sys-color-surface-container-low)', opacity: 0.4 }}
+                      content={({ active, payload }) => {
+                        if (active && payload && payload.length) {
+                          const data = payload[0].payload;
+                          return (
+                            <div className="bg-surface-container-highest p-3 rounded-xl shadow-xl border border-surface-container-low text-right">
+                              <p className="text-xs font-bold text-on-surface mb-2">{data.fullMonth}</p>
+                              <div className="space-y-1">
+                                <p className="text-[10px] font-bold flex justify-between gap-4" style={{ color: '#FFB74D' }}>
+                                  <span>{formatCurrency(data.checking)}</span>
+                                  <span>נכסים:</span>
                                 </p>
+                                <p className="text-[10px] font-bold flex justify-between gap-4" style={{ color: '#64B5F6' }}>
+                                  <span>{formatCurrency(data.savings)}</span>
+                                  <span>חיסכון:</span>
+                                </p>
+                                <div className="pt-1 mt-1 border-t border-on-surface/10">
+                                  <p className="text-xs font-black text-on-surface flex justify-between gap-4">
+                                    <span>{formatCurrency(data.total)}</span>
+                                    <span>סה״כ:</span>
+                                  </p>
+                                </div>
                               </div>
                             </div>
-                          </div>
-                        );
-                      }
-                      return null;
-                    }}
-                  />
-                  <Legend 
-                    verticalAlign="top" 
-                    align="right" 
-                    iconType="circle"
-                    wrapperStyle={{ paddingBottom: '20px', fontSize: '12px', fontWeight: 600 }}
-                    formatter={(value) => <span className="text-on-surface-variant">{value === 'checking' ? 'נכסים' : 'חיסכון'}</span>}
-                  />
-                  <Bar dataKey="checking" stackId="a" fill="#FFB74D" radius={[0, 0, 0, 0]} barSize={24} />
-                  <Bar dataKey="savings" stackId="a" fill="#64B5F6" radius={[4, 4, 0, 0]} barSize={24} />
-                </BarChart>
-              </ResponsiveContainer>
+                          );
+                        }
+                        return null;
+                      }}
+                    />
+                    <Legend 
+                      verticalAlign="top" 
+                      align="right" 
+                      iconType="circle"
+                      wrapperStyle={{ paddingBottom: '20px', fontSize: '12px', fontWeight: 600 }}
+                      formatter={(value) => <span className="text-on-surface-variant">{value === 'checking' ? 'נכסים' : 'חיסכון'}</span>}
+                    />
+                    <Bar dataKey="checking" stackId="a" fill="#FFB74D" radius={[0, 0, 0, 0]} barSize={barSize} />
+                    <Bar dataKey="savings" stackId="a" fill="#64B5F6" radius={[4, 4, 0, 0]} barSize={barSize} />
+                  </BarChart>
+                </div>
+              ) : (
+                <div className="h-full w-full rounded-xl bg-surface-container-low" />
+              )}
             </div>
           </div>
 

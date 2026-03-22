@@ -172,17 +172,159 @@ export const BudgetProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     localStorage.setItem('budget_settings', JSON.stringify(settings));
   }, [settings]);
 
+  const callBackendJsonp = (action: string, payload?: any): Promise<any> => {
+    return new Promise((resolve, reject) => {
+      if (!settings.scriptUrl || !settings.secretKey) {
+        resolve(null);
+        return;
+      }
+
+      const callbackName = `bp_jsonp_${Date.now()}_${Math.floor(Math.random() * 100000)}`;
+      const timeoutMs = 15000;
+      let timeoutId: number | null = null;
+
+      const cleanup = () => {
+        try {
+          delete (window as any)[callbackName];
+        } catch (_) {
+          (window as any)[callbackName] = undefined;
+        }
+        if (timeoutId) window.clearTimeout(timeoutId);
+        if (script.parentNode) script.parentNode.removeChild(script);
+      };
+
+      (window as any)[callbackName] = (data: any) => {
+        cleanup();
+        resolve(data);
+      };
+
+      const url = new URL(settings.scriptUrl);
+      url.searchParams.set('action', action);
+      url.searchParams.set('secret', settings.secretKey);
+      url.searchParams.set('payload', JSON.stringify(payload || {}));
+      url.searchParams.set('callback', callbackName);
+
+      const script = document.createElement('script');
+      script.src = url.toString();
+      script.async = true;
+      script.onerror = () => {
+        cleanup();
+        reject(new Error('JSONP request failed'));
+      };
+
+      timeoutId = window.setTimeout(() => {
+        cleanup();
+        reject(new Error('JSONP request timed out'));
+      }, timeoutMs);
+
+      document.body.appendChild(script);
+    });
+  };
+
+  const callBackend = async (action: string, payload?: any) => {
+    if (!settings.scriptUrl || !settings.secretKey) return null;
+
+    try {
+      const form = new URLSearchParams();
+      form.set('action', action);
+      form.set('secret', settings.secretKey);
+      form.set('payload', JSON.stringify(payload || {}));
+
+      const res = await fetch(settings.scriptUrl, {
+        method: 'POST',
+        body: form,
+      });
+
+      if (!res.ok) {
+        throw new Error(`Backend HTTP ${res.status}`);
+      }
+
+      const raw = await res.text();
+      const data = raw ? JSON.parse(raw) : null;
+      if (data && data.ok === false) {
+        throw new Error(data.message || `Backend action failed: ${action}`);
+      }
+
+      return data;
+    } catch (err) {
+      // Apps Script often blocks CORS on localhost. Fallback to JSONP GET.
+      const data = await callBackendJsonp(action, payload);
+      if (data && data.ok === false) {
+        throw new Error(data.message || `Backend action failed: ${action}`);
+      }
+      return data;
+    }
+  };
+
+  const syncAllToBackend = async (
+    next: {
+      settings?: BudgetSettings;
+      transactions?: Transaction[];
+      savingsGoals?: SavingsGoal[];
+      accountBalances?: AccountBalance[];
+      categories?: string[];
+    } = {}
+  ) => {
+    if (!settings.scriptUrl || !settings.secretKey) return;
+
+    try {
+      await callBackend('replaceAllData', {
+        settings: next.settings || settings,
+        transactions: next.transactions || transactions,
+        savingsGoals: next.savingsGoals || savingsGoals,
+        accountBalances: next.accountBalances || accountBalances,
+        categories: next.categories || categories,
+      });
+    } catch (err) {
+      console.error('Failed syncing app state to backend:', err);
+    }
+  };
+
   const [categories, setCategories] = useState<string[]>(['מזון', 'פנאי', 'תחבורה', 'בריאות', 'קניות', 'מגורים', 'אחר']);
+
+  useEffect(() => {
+    const loadFromBackend = async () => {
+      if (!settings.scriptUrl || !settings.secretKey) return;
+
+      try {
+        const data = await callBackend('getBootstrapData', {});
+        if (!data || data.ok === false) throw new Error(data?.message || 'Invalid bootstrap response');
+
+        if (Array.isArray(data.transactions)) setTransactions(data.transactions);
+        if (Array.isArray(data.savingsGoals)) setSavingsGoals(data.savingsGoals);
+        if (Array.isArray(data.accountBalances)) setAccountBalances(data.accountBalances);
+        if (Array.isArray(data.categories)) setCategories(data.categories);
+
+        if (data.settings && typeof data.settings === 'object') {
+          setSettings(prev => ({
+            ...prev,
+            ...data.settings,
+            // keep login credentials from local app state
+            scriptUrl: prev.scriptUrl,
+            secretKey: prev.secretKey,
+          }));
+        }
+      } catch (err) {
+        console.error('Failed loading bootstrap data from backend:', err);
+      }
+    };
+
+    loadFromBackend();
+  }, [settings.scriptUrl, settings.secretKey]);
 
   const addCategory = (category: string) => {
     if (!categories.includes(category)) {
-      setCategories(prev => [...prev, category]);
+      const next = [...categories, category];
+      setCategories(next);
+      void syncAllToBackend({ categories: next });
     }
   };
 
   const addTransaction = (t: Omit<Transaction, 'id'>) => {
     const newTransaction = { ...t, id: Math.random().toString(36).substr(2, 9) };
-    setTransactions(prev => [newTransaction, ...prev]);
+    const next = [newTransaction, ...transactions];
+    setTransactions(next);
+    void syncAllToBackend({ transactions: next });
   };
 
   const updateTransaction = (id: string, updates: Partial<Transaction>) => {
@@ -199,7 +341,7 @@ export const BudgetProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         const depositDate = new Date(cycleDate);
         depositDate.setDate(goal.depositDay || 1);
 
-        addTransaction({
+        const newTransaction = {
           name: `הפקדה: ${goal.name}`,
           amount: goal.monthlyAmount || 0,
           type: 'savings_deposit',
@@ -208,11 +350,14 @@ export const BudgetProvider: React.FC<{ children: React.ReactNode }> = ({ childr
           ...updates,
           goalId: goal.id,
           cycleDate: cycleDate
-        });
+        } as Omit<Transaction, 'id'>;
+        addTransaction(newTransaction);
       }
       return;
     }
-    setTransactions(prev => prev.map(t => t.id === id ? { ...t, ...updates } : t));
+    const next = transactions.map(t => t.id === id ? { ...t, ...updates } : t);
+    setTransactions(next);
+    void syncAllToBackend({ transactions: next });
   };
 
   const deleteTransaction = (id: string) => {
@@ -227,7 +372,7 @@ export const BudgetProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         const depositDate = new Date(cycleDate);
         depositDate.setDate(goal.depositDay || 1);
 
-        addTransaction({
+        const newTransaction = {
           name: `הפקדה: ${goal.name}`,
           amount: 0, // Tombstone
           type: 'savings_deposit',
@@ -235,41 +380,61 @@ export const BudgetProvider: React.FC<{ children: React.ReactNode }> = ({ childr
           category: 'savings',
           goalId: goal.id,
           cycleDate: cycleDate
-        });
+        } as Omit<Transaction, 'id'>;
+        addTransaction(newTransaction);
       }
       return;
     }
-    setTransactions(prev => prev.filter(t => t.id !== id));
+    const next = transactions.filter(t => t.id !== id);
+    setTransactions(next);
+    void syncAllToBackend({ transactions: next });
   };
 
   const addSavingsGoal = (goal: Omit<SavingsGoal, 'id'>) => {
     const newGoal = { ...goal, id: Math.random().toString(36).substr(2, 9) };
-    setSavingsGoals(prev => [...prev, newGoal]);
+    const next = [...savingsGoals, newGoal];
+    setSavingsGoals(next);
+    void syncAllToBackend({ savingsGoals: next });
   };
 
   const updateSavingsGoal = (id: string, updates: Partial<SavingsGoal>) => {
-    setSavingsGoals(prev => prev.map(g => g.id === id ? { ...g, ...updates } : g));
+    const next = savingsGoals.map(g => g.id === id ? { ...g, ...updates } : g);
+    setSavingsGoals(next);
+    void syncAllToBackend({ savingsGoals: next });
   };
 
   const deleteSavingsGoal = (id: string) => {
-    setSavingsGoals(prev => prev.filter(g => g.id !== id));
+    const next = savingsGoals.filter(g => g.id !== id);
+    setSavingsGoals(next);
+    void syncAllToBackend({ savingsGoals: next });
   };
 
   const addAccountBalance = (balance: Omit<AccountBalance, 'id'>) => {
     const newBalance = { ...balance, id: Math.random().toString(36).substr(2, 9) };
-    setAccountBalances(prev => [...prev, newBalance]);
+    const next = [...accountBalances, newBalance];
+    setAccountBalances(next);
+    void syncAllToBackend({ accountBalances: next });
   };
 
   const updateAccountBalance = (id: string, updates: Partial<AccountBalance>) => {
-    setAccountBalances(prev => prev.map(b => b.id === id ? { ...b, ...updates, lastUpdated: new Date().toISOString() } : b));
+    const next = accountBalances.map(b => b.id === id ? { ...b, ...updates, lastUpdated: new Date().toISOString() } : b);
+    setAccountBalances(next);
+    void syncAllToBackend({ accountBalances: next });
   };
 
   const deleteAccountBalance = (id: string) => {
-    setAccountBalances(prev => prev.filter(b => b.id !== id));
+    const next = accountBalances.filter(b => b.id !== id);
+    setAccountBalances(next);
+    void syncAllToBackend({ accountBalances: next });
   };
 
   const updateSettings = (updates: Partial<BudgetSettings>) => {
-    setSettings(prev => ({ ...prev, ...updates }));
+    const next = { ...settings, ...updates };
+    setSettings(next);
+    // Do not require scriptUrl/secretKey to exist when user is logging in
+    if (next.scriptUrl && next.secretKey) {
+      void syncAllToBackend({ settings: next });
+    }
   };
 
   const logout = () => {

@@ -31,6 +31,7 @@ export const Settings: React.FC = () => {
 
   const fixedExpenses = transactions.filter(t => t.type === 'fixed_expense');
   const fixedIncome = transactions.filter(t => t.type === 'fixed_income');
+  const profileImageSrc = settings.profileImage?.trim() || null;
 
   const handleImageClick = () => {
     fileInputRef.current?.click();
@@ -63,12 +64,16 @@ export const Settings: React.FC = () => {
         <div className="relative group">
           <div className="absolute -inset-2 bg-gradient-to-tr from-primary to-secondary rounded-full blur opacity-25 group-hover:opacity-50 transition duration-1000" />
           <div className="relative w-24 h-24 rounded-full bg-primary-container flex items-center justify-center overflow-hidden border-4 border-white shadow-sm">
-            <img 
-              alt="Profile" 
-              className="w-full h-full object-cover" 
-              src={settings.profileImage}
-              referrerPolicy="no-referrer"
-            />
+            {profileImageSrc ? (
+              <img 
+                alt="Profile" 
+                className="w-full h-full object-cover" 
+                src={profileImageSrc}
+                referrerPolicy="no-referrer"
+              />
+            ) : (
+              <span className="material-symbols-outlined text-primary text-4xl">person</span>
+            )}
           </div>
           <button 
             onClick={handleImageClick}

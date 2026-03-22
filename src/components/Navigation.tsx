@@ -12,6 +12,7 @@ export const TopAppBar: React.FC<{ title?: string }> = ({ title }) => {
   const { settings } = useBudget();
   const location = useLocation();
   const [showNotification, setShowNotification] = React.useState(false);
+  const profileImageSrc = settings.profileImage?.trim() || null;
 
   React.useEffect(() => {
     const isDismissed = sessionStorage.getItem('banner_dismissed');
@@ -45,12 +46,16 @@ export const TopAppBar: React.FC<{ title?: string }> = ({ title }) => {
             {title && <span className="text-primary font-bold text-lg leading-none">{title}</span>}
           </div>
           <div className="w-10 h-10 rounded-full bg-primary-container flex items-center justify-center overflow-hidden border-2 border-white shadow-sm">
-            <img 
-              alt="User profile" 
-              className="w-full h-full object-cover"
-              src={settings.profileImage}
-              referrerPolicy="no-referrer"
-            />
+            {profileImageSrc ? (
+              <img 
+                alt="User profile" 
+                className="w-full h-full object-cover"
+                src={profileImageSrc}
+                referrerPolicy="no-referrer"
+              />
+            ) : (
+              <span className="material-symbols-outlined text-primary">person</span>
+            )}
           </div>
         </div>
         <button className="w-10 h-10 flex items-center justify-center rounded-full transition-all duration-300 active:scale-95 hover:bg-primary/10">

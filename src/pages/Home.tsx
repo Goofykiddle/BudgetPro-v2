@@ -1,11 +1,11 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { motion } from 'motion/react';
 import { useNavigate } from 'react-router-dom';
 import { cn, formatCurrency, parseDateLocal } from '../lib/utils';
 import { AddTransactionModal } from '../components/AddTransactionModal';
 import { EditTransactionModal } from '../components/EditTransactionModal';
 import { useBudget } from '../context/BudgetContext';
-import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, BarChart, Bar, XAxis, YAxis } from 'recharts';
+import { PieChart, Pie, Cell, Tooltip, BarChart, Bar, XAxis, YAxis } from 'recharts';
 
 /**
  * Home Screen
@@ -17,6 +17,15 @@ export const Home: React.FC = () => {
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [editingTransaction, setEditingTransaction] = useState<any>(null);
   const [activeTab, setActiveTab] = useState<'categories' | 'months'>('categories');
+  const [isChartReady, setIsChartReady] = useState(false);
+
+  useEffect(() => {
+    const id = window.requestAnimationFrame(() => setIsChartReady(true));
+    return () => {
+      window.cancelAnimationFrame(id);
+      setIsChartReady(false);
+    };
+  }, []);
 
   const currentCycleTransactions = getFilteredTransactions('all');
   const recentActivity = currentCycleTransactions.slice(0, 4);
@@ -298,9 +307,9 @@ export const Home: React.FC = () => {
 
                 {/* Chart Section - Right Side */}
                 <div className="flex-1 flex flex-col items-center gap-2">
-                  <div className="relative w-32 h-32">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <PieChart>
+                  <div className="relative w-32 h-32 min-w-[128px] min-h-[128px]">
+                    {isChartReady ? (
+                      <PieChart width={128} height={128}>
                         <Pie
                           data={pieData}
                           cx="50%"
@@ -316,7 +325,9 @@ export const Home: React.FC = () => {
                           ))}
                         </Pie>
                       </PieChart>
-                    </ResponsiveContainer>
+                    ) : (
+                      <div className="h-full w-full rounded-full bg-surface-container-low" />
+                    )}
                     {/* Center Text */}
                     <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
                       <span className="text-[8px] font-bold text-on-surface-variant leading-tight">עסקאות</span>
@@ -351,9 +362,9 @@ export const Home: React.FC = () => {
                 </div>
 
                 {/* Chart Section - Right Side */}
-                <div className="flex-1 h-32">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={monthlyData} margin={{ top: 10, right: 0, left: 0, bottom: 0 }}>
+                <div className="flex-1 h-32 min-w-0 min-h-[128px]">
+                  {isChartReady ? (
+                    <BarChart width={220} height={128} data={monthlyData} margin={{ top: 10, right: 0, left: 0, bottom: 0 }}>
                       <XAxis dataKey="name" hide />
                       <YAxis hide />
                       <Tooltip 
@@ -379,7 +390,9 @@ export const Home: React.FC = () => {
                         ))}
                       </Bar>
                     </BarChart>
-                  </ResponsiveContainer>
+                  ) : (
+                    <div className="h-full w-full rounded-xl bg-surface-container-low" />
+                  )}
                 </div>
               </div>
             )}

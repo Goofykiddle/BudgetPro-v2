@@ -510,26 +510,28 @@ function renderHome() {
             <section class="bg-white rounded-3xl border border-surface-variant/30 shadow-sm overflow-hidden">
                 <!-- Tabs -->
                 <div class="flex border-b border-surface-variant/30">
-                    <button onclick="switchHomeChart('trend')" class="flex-1 py-3 flex items-center justify-center gap-2 transition-colors ${state.activeHomeChart === 'trend' ? 'bg-white text-primary' : 'bg-surface-variant/20 text-on-surface-variant'}">
+                    <button onclick="switchHomeChart('trend')" class="flex-1 py-3 flex items-center justify-center gap-2 transition-colors ${state.activeHomeChart === 'trend' ? 'bg-white text-on-surface' : 'bg-surface-variant/20 text-on-surface-variant'}">
                         <span class="material-symbols-outlined text-lg">bar_chart</span>
                         <span class="font-bold text-xs">גרף חודשים</span>
+                        <span class="material-symbols-outlined text-base">${state.activeHomeChart === 'trend' ? 'keyboard_arrow_up' : 'keyboard_arrow_down'}</span>
                     </button>
                     <div class="w-[1px] bg-surface-variant/30"></div>
-                    <button onclick="switchHomeChart('category')" class="flex-1 py-3 flex items-center justify-center gap-2 transition-colors ${state.activeHomeChart === 'category' ? 'bg-white text-primary' : 'bg-surface-variant/20 text-on-surface-variant'}">
+                    <button onclick="switchHomeChart('category')" class="flex-1 py-3 flex items-center justify-center gap-2 transition-colors ${state.activeHomeChart === 'category' ? 'bg-white text-on-surface' : 'bg-surface-variant/20 text-on-surface-variant'}">
                         <span class="material-symbols-outlined text-lg">donut_large</span>
                         <span class="font-bold text-xs">גרף קטגוריות</span>
+                        <span class="material-symbols-outlined text-base">${state.activeHomeChart === 'category' ? 'keyboard_arrow_up' : 'keyboard_arrow_down'}</span>
                     </button>
                 </div>
 
                 <!-- Content -->
                 <div class="p-3">
                     ${state.activeHomeChart === 'category' ? `
-                        <div class="flex flex-row-reverse gap-4 items-center">
+                        <div class="flex flex-row-reverse gap-5 items-center">
                             <!-- Doughnut Chart -->
-                            <div class="w-24 h-24 relative shrink-0">
+                            <div class="w-40 h-40 relative shrink-0">
                                 <canvas id="categoryChart"></canvas>
                                 <div class="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-                                    <p class="text-[7px] font-bold text-on-surface-variant">החודש</p>
+                                    <p class="text-lg leading-tight text-center text-on-surface">עסקאות<br>החודש</p>
                                 </div>
                             </div>
 
@@ -552,12 +554,12 @@ function renderHome() {
                                             const categoryObj = state.categories.find(c => c.name === cat) || { icon: 'category' };
                                             return `
                                                 <div class="flex items-center justify-between">
-                                                    <p class="font-bold text-[10px]">${formatCurrency(amount)}</p>
-                                                    <div class="flex items-center flex-row-reverse gap-2">
-                                                        <div class="w-6 h-6 rounded-full bg-surface-variant/30 flex items-center justify-center text-primary">
-                                                            <span class="material-symbols-outlined text-[10px]">${categoryObj.icon}</span>
-                                                        </div>
-                                                        <p class="text-[8px] text-on-surface-variant">${cat}</p>
+                                                    <div class="text-right">
+                                                        <p class="font-black text-xl leading-tight">${formatCurrency(amount)}</p>
+                                                        <p class="text-[9px] text-on-surface-variant leading-tight">${cat}</p>
+                                                    </div>
+                                                    <div class="w-7 h-7 rounded-md bg-surface-variant/30 flex items-center justify-center text-primary">
+                                                        <span class="material-symbols-outlined text-sm">${categoryObj.icon}</span>
                                                     </div>
                                                 </div>
                                             `;
@@ -565,8 +567,8 @@ function renderHome() {
                                 })()}
                             </div>
                         </div>
-                        <div class="mt-2 text-center">
-                            <button onclick="navigate('/transactions')" class="text-cyan-500 font-bold text-[10px] flex items-center justify-center gap-1 mx-auto">
+                        <div class="mt-3 text-center">
+                            <button onclick="navigate('/transactions')" class="text-cyan-500 font-black text-xl flex items-center justify-center gap-1 mx-auto">
                                 לכל הקטגוריות >
                             </button>
                         </div>

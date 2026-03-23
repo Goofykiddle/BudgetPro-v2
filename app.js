@@ -6,13 +6,13 @@
 // --- State Management ---
 const state = {
     transactions: [
-        { id: '1', name: 'משכורת 1', amount: 12500, type: 'fixed_income', date: '2026-03-01', desc: 'העברה בנקאית', isRecurring: true },
-        { id: '2', name: 'משכורת 2', amount: 4200, type: 'fixed_income', date: '2026-03-05', desc: 'הפקדה חודשית', isRecurring: true },
-        { id: '3', name: 'שכר דירה', amount: 5200, type: 'fixed_expense', date: '2026-03-01', desc: 'העברה בנקאית', isRecurring: true },
-        { id: '4', name: 'חשבון מים', amount: 245.80, type: 'fixed_expense', date: '2026-03-15', desc: 'מקורות', isRecurring: true },
-        { id: '5', name: 'סופר-מרקט', amount: 842.15, type: 'variable_expense', date: '2026-03-20', desc: 'שופרסל', isRecurring: false },
-        { id: '6', name: 'חשמל', amount: 412.00, type: 'fixed_expense', date: '2026-03-21', desc: 'חברת החשמל', alert: true, isRecurring: true },
-        { id: '7', name: 'נטפליקס', amount: 54.90, type: 'fixed_expense', date: '2026-03-10', desc: 'מנוי חודשי', isRecurring: true },
+        { id: '1', name: 'משכורת 1', amount: 10000, type: 'fixed_income', date: '2026-03-10', desc: 'העברה בנקאית', isRecurring: true, frequency: 'monthly', category: 'משכורת' },
+        { id: '2', name: 'משכורת 2', amount: 10000, type: 'fixed_income', date: '2026-03-10', desc: 'הפקדה חודשית', isRecurring: true, frequency: 'monthly', category: 'משכורת' },
+        { id: '3', name: 'שכר דירה', amount: 7350, type: 'fixed_expense', date: '2026-03-11', desc: 'העברה בנקאית', isRecurring: true, frequency: 'monthly', category: 'מגורים' },
+        { id: '4', name: 'חשבון מים', amount: 245, type: 'fixed_expense', date: '2026-03-15', desc: 'מקורות', isRecurring: true, frequency: 'monthly', category: 'מגורים' },
+        { id: '6', name: 'חשמל', amount: 500, type: 'fixed_expense', date: '2026-03-21', desc: 'חברת החשמל', alert: true, isRecurring: true, frequency: 'bi-monthly', isVariablePrice: true, lastMonthAmount: 480, category: 'מגורים' },
+        { id: '7', name: 'נטפליקס', amount: 155, type: 'fixed_expense', date: '2026-03-10', desc: 'מנוי חודשי', isRecurring: true, frequency: 'monthly', category: 'פנאי' },
+        { id: '8', name: 'ארנונה', amount: 500, type: 'fixed_expense', date: '2026-03-11', desc: 'עירייה', isRecurring: true, frequency: 'bi-monthly', category: 'מגורים' },
     ],
     savingsGoals: [
         { 
@@ -44,24 +44,10 @@ const state = {
             depositDay: 1,
             monthlyAmount: 833
         },
-        { 
-            id: '3', 
-            name: 'קופת גמל', 
-            target: 250000, 
-            current: 205000, 
-            icon: 'account_balance_wallet', 
-            color: 'bg-orange-400', 
-            container: 'bg-orange-50', 
-            onContainer: 'text-orange-900',
-            startDate: '2025-01-01',
-            durationMonths: 180,
-            depositDay: 1,
-            monthlyAmount: 1388
-        },
     ],
     accountBalances: [
-        { id: '1', name: 'חשבון עו״ש עיקרי', amount: 12450, type: 'checking', lastUpdated: new Date().toISOString() },
-        { id: '2', name: 'קופת גמל להשקעה', amount: 45000, type: 'savings', lastUpdated: new Date().toISOString() },
+        { id: '1', name: 'חשבון עו״ש עיקרי', amount: 100000, type: 'checking', lastUpdated: new Date().toISOString() },
+        { id: '2', name: 'קופת גמל להשקעה', amount: 10000, type: 'savings', lastUpdated: new Date().toISOString() },
     ],
     settings: {
         userName: 'יונתן',
@@ -73,7 +59,21 @@ const state = {
         scriptUrl: '',
         secretKey: ''
     },
-    categories: ['מזון', 'פנאי', 'תחבורה', 'בריאות', 'קניות', 'מגורים', 'אחר'],
+    categories: [
+        { name: 'מזון', icon: 'restaurant' },
+        { name: 'פנאי', icon: 'sports_esports' },
+        { name: 'תחבורה', icon: 'directions_car' },
+        { name: 'בריאות', icon: 'medical_services' },
+        { name: 'קניות', icon: 'shopping_bag' },
+        { name: 'מגורים', icon: 'home' },
+        { name: 'חינוך', icon: 'school' },
+        { name: 'מתנות', icon: 'redeem' },
+        { name: 'ביטוח', icon: 'verified_user' },
+        { name: 'משכורת', icon: 'payments' },
+        { name: 'הפרשות לחסכון', icon: 'savings' },
+        { name: 'אחר', icon: 'category' }
+    ],
+    activeHomeChart: 'category', // 'category' or 'trend'
     currentPath: window.location.hash.replace('#', '') || '/',
     isLoading: false,
     error: null
@@ -98,7 +98,15 @@ const TRANSACTION_TYPES = {
     variable_income: { label: 'הכנסה משתנה', icon: 'add_card', color: 'text-emerald-600' },
     fixed_expense: { label: 'הוצאה קבועה', icon: 'account_balance_wallet', color: 'text-rose-600' },
     variable_expense: { label: 'הוצאה משתנה', icon: 'shopping_cart', color: 'text-rose-600' },
-    savings_deposit: { label: 'הפקדה לחיסכון', icon: 'savings', color: 'text-blue-600' }
+    savings_deposit: { label: 'הפרשות לחסכון', icon: 'savings', color: 'text-blue-600' }
+};
+
+const FREQUENCIES = {
+    'monthly': { label: 'חודשי', months: 1 },
+    'bi-monthly': { label: 'דו-חודשי', months: 2 },
+    'quarterly': { label: 'רבעוני', months: 3 },
+    'semi-annually': { label: 'חצי-שנתי', months: 6 },
+    'annually': { label: 'שנתי', months: 12 }
 };
 
 // --- Utility Functions ---
@@ -173,6 +181,7 @@ function getFilteredTransactions(filterType, date = new Date()) {
                         name: `הפקדה: ${goal.name}`,
                         amount: goal.monthlyAmount,
                         type: 'savings_deposit',
+                        category: 'הפרשות לחסכון',
                         date: formatDateLocal(depositDate),
                         isRecurring: true,
                         desc: 'הפקדה אוטומטית לחיסכון',
@@ -316,7 +325,8 @@ function renderBottomNavBar() {
 }
 
 function renderPage(path) {
-    switch (path) {
+    const basePath = path.split('?')[0];
+    switch (basePath) {
         case '/': return renderHome();
         case '/transactions': return renderTransactions();
         case '/savings': return renderSavings();
@@ -344,17 +354,18 @@ function renderHome() {
         .filter(t => t.type === 'savings_deposit')
         .reduce((sum, t) => sum + t.amount, 0);
         
-    const balance = income - expenses - savings;
-    const totalBalance = state.accountBalances.reduce((sum, acc) => sum + acc.amount, 0);
+    const remainingToSpend = income - expenses - savings;
+    const totalAssets = state.accountBalances.reduce((sum, acc) => sum + acc.amount, 0);
 
     return `
         <div class="space-y-6">
             <!-- Balance Card -->
-            <div class="bg-primary rounded-3xl p-6 text-on-primary shadow-lg shadow-primary/20 relative overflow-hidden">
+            <div class="bg-primary rounded-3xl p-6 text-on-primary shadow-lg shadow-primary/20 relative overflow-hidden mt-4">
                 <div class="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full -mr-16 -mt-16 blur-2xl"></div>
                 <div class="relative z-10">
-                    <p class="text-sm opacity-80 mb-1">יתרה כוללת בנכסים</p>
-                    <h2 class="text-3xl font-bold mb-6">${formatCurrency(totalBalance)}</h2>
+                    <p class="text-sm opacity-80 mb-1">יתרה שנותרה לבזבוז החודש</p>
+                    <h2 class="text-3xl font-bold mb-1">${formatCurrency(remainingToSpend)}</h2>
+                    <p class="text-[10px] opacity-60 mb-6">סה״כ נכסים: ${formatCurrency(totalAssets)}</p>
                     
                     <div class="grid grid-cols-2 gap-4">
                         <div class="bg-white/10 rounded-2xl p-3 backdrop-blur-sm">
@@ -362,7 +373,7 @@ function renderHome() {
                             <p class="text-lg font-bold">${formatCurrency(income)}</p>
                         </div>
                         <div class="bg-white/10 rounded-2xl p-3 backdrop-blur-sm">
-                            <p class="text-[10px] opacity-80 uppercase tracking-wider mb-1">הוצאות החודש</p>
+                            <p class="text-[10px] opacity-80 uppercase tracking-wider mb-1">הוצאות והפרשות</p>
                             <p class="text-lg font-bold">${formatCurrency(expenses + savings)}</p>
                         </div>
                     </div>
@@ -404,49 +415,135 @@ function renderHome() {
                     <button onclick="navigate('/savings')" class="text-sm text-primary font-medium">נהל הכל</button>
                 </div>
                 <div class="flex gap-4 overflow-x-auto no-scrollbar pb-2 -mx-4 px-4">
-                    ${state.savingsGoals.map(goal => `
-                        <div class="min-w-[200px] ${goal.container} rounded-3xl p-4 flex flex-col gap-3">
+                    ${state.savingsGoals.map(goal => {
+                        const progress = (goal.current / goal.target) * 100;
+                        return `
+                        <div onclick="renderSavingsModal(${JSON.stringify(goal).replace(/"/g, '&quot;')})" class="min-w-[200px] ${goal.container} rounded-3xl p-4 flex flex-col gap-3 cursor-pointer hover:scale-[1.02] transition-transform">
                             <div class="flex items-center justify-between">
                                 <div class="w-10 h-10 rounded-2xl ${goal.color} flex items-center justify-center text-white shadow-sm">
                                     <span class="material-symbols-outlined">${goal.icon}</span>
                                 </div>
-                                <span class="text-[10px] font-bold ${goal.onContainer} opacity-60">${Math.round((goal.current / goal.target) * 100)}%</span>
+                                <span class="text-[10px] font-bold ${goal.onContainer} opacity-60">${Math.round(progress)}%</span>
                             </div>
                             <div>
                                 <h4 class="font-bold text-sm ${goal.onContainer}">${goal.name}</h4>
                                 <p class="text-xs ${goal.onContainer} opacity-70">${formatCurrency(goal.current)} מתוך ${formatCurrency(goal.target)}</p>
                             </div>
                             <div class="w-full h-2 bg-white/50 rounded-full overflow-hidden">
-                                <div class="h-full ${goal.color}" style="width: ${(goal.current / goal.target) * 100}%"></div>
+                                <div class="h-full ${goal.color}" style="width: ${progress}%"></div>
                             </div>
                         </div>
-                    `).join('')}
+                        `;
+                    }).join('')}
                 </div>
             </section>
 
-            <!-- Fixed Expenses -->
+            <!-- Recent Transactions -->
             <section>
                 <div class="flex items-center justify-between mb-4">
-                    <h3 class="text-lg font-bold">הוצאות קבועות החודש</h3>
-                    <button onclick="navigate('/transactions?filter=fixed')" class="text-sm text-primary font-bold hover:underline">נהל הכל</button>
+                    <h3 class="text-lg font-bold">תנועות אחרונות</h3>
+                    <button onclick="navigate('/transactions')" class="text-sm text-primary font-bold hover:underline">נהל הכל</button>
                 </div>
-                <div class="bg-white rounded-3xl p-6 border border-surface-variant/30 shadow-sm">
-                    <div class="space-y-4">
-                        ${currentTransactions.filter(t => t.type === 'fixed_expense').slice(0, 4).map(t => `
-                            <div class="flex items-center justify-between">
-                                <div class="flex items-center gap-3">
-                                    <div class="w-10 h-10 rounded-full bg-rose-50 text-rose-600 flex items-center justify-center">
-                                        <span class="material-symbols-outlined text-sm">${TRANSACTION_TYPES[t.type].icon}</span>
+                <div class="flex gap-3 overflow-x-auto no-scrollbar pb-2 -mx-4 px-4">
+                    ${(() => {
+                        const recentTransactions = [...currentTransactions]
+                            .sort((a, b) => new Date(b.date) - new Date(a.date))
+                            .slice(0, 7);
+                            
+                        return recentTransactions.map(t => {
+                            const isExpense = t.type.includes('expense') || t.type === 'savings_deposit';
+                            const colorClass = isExpense ? 'bg-rose-50 text-rose-600' : 'bg-emerald-50 text-emerald-600';
+                            const amountSign = isExpense ? '-' : '+';
+                            
+                            return `
+                                <div onclick="renderTransactionModal(${JSON.stringify(t).replace(/"/g, '&quot;')})" class="min-w-[150px] bg-white rounded-2xl p-3 border border-surface-variant/30 shadow-sm flex flex-col gap-2 cursor-pointer hover:scale-[1.02] transition-transform">
+                                    <div class="flex items-center justify-between">
+                                        <div class="w-8 h-8 rounded-full ${colorClass} flex items-center justify-center">
+                                            <span class="material-symbols-outlined text-sm">${TRANSACTION_TYPES[t.type]?.icon || 'receipt_long'}</span>
+                                        </div>
+                                        <span class="text-[9px] text-on-surface-variant font-medium">${t.date.split('-').slice(1).reverse().join('/')}</span>
                                     </div>
                                     <div>
-                                        <p class="text-sm font-bold">${t.name}</p>
-                                        <p class="text-[10px] text-on-surface-variant">${t.date}</p>
+                                        <h4 class="font-bold text-xs truncate">${t.name}</h4>
+                                        <p class="text-[9px] text-on-surface-variant truncate">${t.category || 'ללא קטגוריה'}</p>
                                     </div>
+                                    <p class="font-bold text-sm ${isExpense ? 'text-rose-600' : 'text-emerald-600'}">${amountSign}${formatCurrency(t.amount)}</p>
                                 </div>
-                                <p class="font-bold text-rose-600">${formatCurrency(t.amount)}</p>
+                            `;
+                        }).join('');
+                    })()}
+                </div>
+            </section>
+
+            <!-- Charts Section (MAX Style) -->
+            <section class="bg-white rounded-3xl border border-surface-variant/30 shadow-sm overflow-hidden">
+                <!-- Tabs -->
+                <div class="flex border-b border-surface-variant/30">
+                    <button onclick="switchHomeChart('trend')" class="flex-1 py-3 flex items-center justify-center gap-2 transition-colors ${state.activeHomeChart === 'trend' ? 'bg-surface-variant/20 text-primary' : 'text-on-surface-variant'}">
+                        <span class="material-symbols-outlined text-lg">bar_chart</span>
+                        <span class="font-bold text-xs">גרף חודשים</span>
+                    </button>
+                    <div class="w-[1px] bg-surface-variant/30"></div>
+                    <button onclick="switchHomeChart('category')" class="flex-1 py-3 flex items-center justify-center gap-2 transition-colors ${state.activeHomeChart === 'category' ? 'bg-surface-variant/20 text-primary' : 'text-on-surface-variant'}">
+                        <span class="material-symbols-outlined text-lg">donut_large</span>
+                        <span class="font-bold text-xs">גרף קטגוריות</span>
+                    </button>
+                </div>
+
+                <!-- Content -->
+                <div class="p-3">
+                    ${state.activeHomeChart === 'category' ? `
+                        <div class="flex flex-col md:flex-row gap-4 items-center">
+                            <!-- Category List -->
+                            <div class="flex-1 w-full space-y-2">
+                                ${(() => {
+                                    const currentTransactions = getFilteredTransactions('all');
+                                    const expenses = currentTransactions.filter(t => t.type.includes('expense'));
+                                    const categoryTotals = {};
+                                    expenses.forEach(t => {
+                                        const cat = t.category || 'אחר';
+                                        categoryTotals[cat] = (categoryTotals[cat] || 0) + t.amount;
+                                    });
+                                    
+                                    // Sort by amount descending and take top 5
+                                    return Object.entries(categoryTotals)
+                                        .sort(([, a], [, b]) => b - a)
+                                        .slice(0, 5)
+                                        .map(([cat, amount]) => {
+                                            const categoryObj = state.categories.find(c => c.name === cat) || { icon: 'category' };
+                                            return `
+                                                <div class="flex items-center justify-between">
+                                                    <div class="text-right">
+                                                        <p class="font-bold text-[10px]">${formatCurrency(amount)}</p>
+                                                        <p class="text-[8px] text-on-surface-variant">${cat}</p>
+                                                    </div>
+                                                    <div class="w-6 h-6 rounded-full bg-surface-variant/30 flex items-center justify-center text-primary">
+                                                        <span class="material-symbols-outlined text-[10px]">${categoryObj.icon}</span>
+                                                    </div>
+                                                </div>
+                                            `;
+                                        }).join('');
+                                })()}
                             </div>
-                        `).join('')}
-                    </div>
+
+                            <!-- Doughnut Chart -->
+                            <div class="w-24 h-24 relative mx-auto">
+                                <canvas id="categoryChart"></canvas>
+                                <div class="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+                                    <p class="text-[7px] font-bold text-on-surface-variant">החודש</p>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="mt-2 text-center">
+                            <button onclick="navigate('/transactions')" class="text-cyan-500 font-bold text-[10px] flex items-center justify-center gap-1 mx-auto">
+                                לכל הקטגוריות >
+                            </button>
+                        </div>
+                    ` : `
+                        <div class="h-32 relative w-full">
+                            <canvas id="trendChart"></canvas>
+                        </div>
+                    `}
                 </div>
             </section>
         </div>
@@ -485,7 +582,7 @@ function renderTransactions() {
                 <div class="flex gap-3 overflow-x-auto no-scrollbar pb-2 px-2">
                     <button onclick="updateTransactionFilter('category', 'all')" class="px-6 py-3 rounded-2xl font-bold whitespace-nowrap transition-all shadow-sm ${selectedCategory === 'all' ? 'bg-primary text-white' : 'bg-white text-on-surface border border-surface-variant/30'}">הכל</button>
                     ${state.categories.map(cat => `
-                        <button onclick="updateTransactionFilter('category', '${cat}')" class="px-6 py-3 rounded-2xl font-bold whitespace-nowrap transition-all shadow-sm ${selectedCategory === cat ? 'bg-primary text-white' : 'bg-white text-on-surface border border-surface-variant/30'}">${cat}</button>
+                        <button onclick="updateTransactionFilter('category', '${cat.name}')" class="px-6 py-3 rounded-2xl font-bold whitespace-nowrap transition-all shadow-sm ${selectedCategory === cat.name ? 'bg-primary text-white' : 'bg-white text-on-surface border border-surface-variant/30'}">${cat.name}</button>
                     `).join('')}
                 </div>
             </div>
@@ -605,7 +702,7 @@ function renderSavings() {
                         const timeProgress = Math.min(100, Math.max(0, (elapsedMonths / duration) * 100));
 
                         return `
-                            <div class="bg-white p-6 rounded-3xl border border-surface-variant/30 shadow-sm space-y-6 group hover:border-primary/20 transition-colors relative overflow-hidden cursor-pointer">
+                            <div onclick="renderSavingsModal(${JSON.stringify(goal).replace(/"/g, '&quot;')})" class="bg-white p-6 rounded-3xl border border-surface-variant/30 shadow-sm space-y-6 group hover:border-primary/20 transition-colors relative overflow-hidden cursor-pointer active:scale-[0.98]">
                                 <div class="flex justify-between items-start relative z-10">
                                     <div class="flex items-center gap-4">
                                         <div class="w-14 h-14 rounded-2xl flex items-center justify-center shadow-sm ${goal.container} ${goal.onContainer}">
@@ -633,6 +730,7 @@ function renderSavings() {
                                             <div class="w-2.5 h-2.5 rounded-full border-2 border-white shadow-sm -mt-1 ${goal.color}"></div>
                                             <div class="mt-4 text-white text-[9px] font-black px-2 py-1 rounded-lg shadow-md whitespace-nowrap flex flex-col items-center gap-0.5 ${goal.color}">
                                                 <span>${currentMonthStr}</span>
+                                                <span class="text-[8px] opacity-80">${formatCurrency(goal.current)}</span>
                                             </div>
                                         </div>
                                     </div>
@@ -709,19 +807,89 @@ function renderForecast() {
                                     </div>
                                     <h4 class="text-lg font-extrabold">${item.fullMonth}</h4>
                                 </div>
-                                <div class="text-left">
+                                <div class="text-left group relative">
                                     <p class="text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">יתרה סופית</p>
                                     <p class="text-lg font-black text-primary">${formatCurrency(item.total)}</p>
+                                    
+                                    <!-- Tooltip -->
+                                    <div class="absolute hidden group-hover:block group-active:block z-20 bottom-full left-0 mb-2 bg-surface-variant p-3 rounded-2xl shadow-xl border border-primary/20 min-w-[180px] text-right animate-in fade-in slide-in-from-bottom-1">
+                                        <p class="font-bold text-xs border-b border-primary/10 pb-1 mb-2">חישוב יתרה</p>
+                                        <div class="space-y-1.5">
+                                            <div class="flex justify-between gap-4">
+                                                <span class="text-primary font-bold">${formatCurrency(item.prevTotal)}</span>
+                                                <span class="text-on-surface-variant opacity-70">יתרה קודמת:</span>
+                                            </div>
+                                            <div class="flex justify-between gap-4">
+                                                <span class="${item.netChange >= 0 ? 'text-emerald-600' : 'text-rose-600'} font-bold">${item.netChange >= 0 ? '+' : ''}${formatCurrency(item.netChange)}</span>
+                                                <span class="text-on-surface-variant opacity-70">שינוי נטו:</span>
+                                            </div>
+                                            <div class="pt-1 border-t border-primary/10 flex justify-between gap-4">
+                                                <span class="text-primary font-black">${formatCurrency(item.total)}</span>
+                                                <span class="text-on-surface-variant font-bold">סה״כ:</span>
+                                            </div>
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
-                            <div class="grid grid-cols-2 gap-4 pt-4 border-t border-surface-variant/10">
-                                <div>
-                                    <p class="text-[10px] font-bold text-on-surface-variant opacity-60 uppercase">הכנסות</p>
-                                    <p class="text-sm font-bold text-emerald-600">${formatCurrency(item.income)}</p>
+                            <div class="grid grid-cols-3 gap-2 pt-4 border-t border-surface-variant/10">
+                                <div class="group relative">
+                                    <p class="text-[9px] font-bold text-on-surface-variant opacity-60 uppercase">הכנסות</p>
+                                    <p class="text-xs font-bold text-emerald-600">${formatCurrency(item.income)}</p>
+                                    
+                                    <!-- Tooltip -->
+                                    <div class="absolute hidden group-hover:block group-active:block z-20 bottom-full right-0 mb-2 bg-white p-3 rounded-2xl shadow-xl border border-emerald-100 min-w-[160px] text-right animate-in fade-in slide-in-from-bottom-1">
+                                        <p class="font-bold text-[10px] text-emerald-700 border-b border-emerald-50 pb-1 mb-2">פירוט הכנסות</p>
+                                        <div class="space-y-2">
+                                            ${item.incomeItems.length > 0 ? item.incomeItems.map(ii => `
+                                                <div class="flex justify-between items-center gap-2">
+                                                    <span class="font-bold text-[10px] text-emerald-600">${formatCurrency(ii.amount)}</span>
+                                                    <div class="text-right">
+                                                        <p class="font-bold text-[9px] leading-tight">${ii.name}</p>
+                                                        <p class="text-[8px] text-on-surface-variant opacity-60">${ii.date.split('-').reverse().slice(0,2).join('/')}</p>
+                                                    </div>
+                                                </div>
+                                            `).join('') : '<p class="text-[9px] text-on-surface-variant italic">אין הכנסות החודש</p>'}
+                                        </div>
+                                    </div>
                                 </div>
-                                <div>
-                                    <p class="text-[10px] font-bold text-on-surface-variant opacity-60 uppercase">הוצאות</p>
-                                    <p class="text-sm font-bold text-rose-600">${formatCurrency(-(item.expense + item.saving))}</p>
+                                <div class="group relative">
+                                    <p class="text-[9px] font-bold text-on-surface-variant opacity-60 uppercase">הוצאות</p>
+                                    <p class="text-xs font-bold text-rose-600">${formatCurrency(-item.expense)}</p>
+                                    
+                                    <!-- Tooltip -->
+                                    <div class="absolute hidden group-hover:block group-active:block z-20 bottom-full right-1/2 translate-x-1/2 mb-2 bg-white p-3 rounded-2xl shadow-xl border border-rose-100 min-w-[160px] text-right animate-in fade-in slide-in-from-bottom-1">
+                                        <p class="font-bold text-[10px] text-rose-700 border-b border-rose-50 pb-1 mb-2">פירוט הוצאות</p>
+                                        <div class="space-y-2">
+                                            ${item.expenseItems.length > 0 ? item.expenseItems.map(ei => `
+                                                <div class="flex justify-between items-center gap-2">
+                                                    <span class="font-bold text-[10px] text-rose-600">${formatCurrency(-ei.amount)}</span>
+                                                    <div class="text-right">
+                                                        <p class="font-bold text-[9px] leading-tight">${ei.name}</p>
+                                                        <p class="text-[8px] text-on-surface-variant opacity-60">${ei.date.split('-').reverse().slice(0,2).join('/')}</p>
+                                                    </div>
+                                                </div>
+                                            `).join('') : '<p class="text-[9px] text-on-surface-variant italic">אין הוצאות החודש</p>'}
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="group relative">
+                                    <p class="text-[9px] font-bold text-on-surface-variant opacity-60 uppercase">חיסכון</p>
+                                    <p class="text-xs font-bold text-blue-600">${formatCurrency(-item.saving)}</p>
+                                    
+                                    <!-- Tooltip -->
+                                    <div class="absolute hidden group-hover:block group-active:block z-20 bottom-full left-0 mb-2 bg-white p-3 rounded-2xl shadow-xl border border-blue-100 min-w-[160px] text-right animate-in fade-in slide-in-from-bottom-1">
+                                        <p class="font-bold text-[10px] text-blue-700 border-b border-blue-50 pb-1 mb-2">פירוט חיסכון</p>
+                                        <div class="space-y-2">
+                                            ${item.savingsItems.length > 0 ? item.savingsItems.map(si => `
+                                                <div class="flex justify-between items-center gap-2">
+                                                    <span class="font-bold text-[10px] text-blue-600">${formatCurrency(-si.amount)}</span>
+                                                    <div class="text-right">
+                                                        <p class="font-bold text-[9px] leading-tight">${si.name}</p>
+                                                    </div>
+                                                </div>
+                                            `).join('') : '<p class="text-[9px] text-on-surface-variant italic">אין הפרשות החודש</p>'}
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -736,24 +904,72 @@ function generateForecastData() {
     const data = [];
     let currentChecking = state.accountBalances.filter(a => a.type === 'checking').reduce((s, a) => s + a.amount, 0);
     let currentSavings = state.accountBalances.filter(a => a.type !== 'checking').reduce((s, a) => s + a.amount, 0);
-    const now = new Date();
     
+    const now = new Date();
+    const startMonth = state.settings.startMonth !== undefined ? state.settings.startMonth - 1 : now.getMonth();
+    const startYear = state.settings.startYear || now.getFullYear();
+
     for (let i = 0; i < 12; i++) {
-        const forecastDate = new Date(now.getFullYear(), now.getMonth() + i, 1);
+        const forecastDate = new Date(startYear, startMonth + i, 1);
+        const monthIndex = forecastDate.getMonth();
+        const year = forecastDate.getFullYear();
         
+        const incomeItems = [];
         const fixedIncome = state.transactions
             .filter(t => t.type === 'fixed_income')
-            .reduce((sum, t) => sum + t.amount, 0);
+            .reduce((sum, t) => {
+                const freq = t.frequency || 'monthly';
+                let included = false;
+                if (freq === 'monthly') included = true;
+                else if (freq === 'bi-monthly') {
+                    const tDate = new Date(t.date);
+                    const monthsDiff = (year - tDate.getFullYear()) * 12 + (monthIndex - tDate.getMonth());
+                    if (monthsDiff % 2 === 0) included = true;
+                }
+                else if (freq === 'annual' && monthIndex === 0) included = true;
+
+                if (included) {
+                    incomeItems.push({ name: t.name, amount: t.amount, date: t.date });
+                    return sum + t.amount;
+                }
+                return sum;
+            }, 0);
             
+        const expenseItems = [];
         const fixedExpenses = state.transactions
             .filter(t => t.type === 'fixed_expense')
-            .reduce((sum, t) => sum + t.amount, 0);
+            .reduce((sum, t) => {
+                const freq = t.frequency || 'monthly';
+                let included = false;
+                if (freq === 'monthly') included = true;
+                else if (freq === 'bi-monthly') {
+                    const tDate = new Date(t.date);
+                    const monthsDiff = (year - tDate.getFullYear()) * 12 + (monthIndex - tDate.getMonth());
+                    if (monthsDiff % 2 === 0) included = true;
+                }
+                else if (freq === 'annual' && monthIndex === 0) included = true;
+
+                if (included) {
+                    expenseItems.push({ name: t.name, amount: t.amount, date: t.date });
+                    return sum + t.amount;
+                }
+                return sum;
+            }, 0);
             
+        const savingsItems = [];
         const savingsDeposit = state.savingsGoals.reduce((sum, goal) => {
-            return sum + (goal.monthlyAmount || 0);
+            const startDate = new Date(goal.startDate || '2026-01-01');
+            const monthsPassed = (year - startDate.getFullYear()) * 12 + (monthIndex - startDate.getMonth());
+            
+            if (monthsPassed >= 0 && monthsPassed < (goal.durationMonths || 120)) {
+                savingsItems.push({ name: goal.name, amount: goal.monthlyAmount || 0 });
+                return sum + (goal.monthlyAmount || 0);
+            }
+            return sum;
         }, 0);
         
         const monthlyNet = fixedIncome - fixedExpenses - savingsDeposit;
+        const prevChecking = currentChecking;
         currentChecking += monthlyNet;
         currentSavings += savingsDeposit;
         
@@ -765,7 +981,12 @@ function generateForecastData() {
             saving: savingsDeposit,
             checking: currentChecking,
             savings: currentSavings,
-            total: currentChecking + currentSavings
+            total: currentChecking + currentSavings,
+            incomeItems,
+            expenseItems,
+            savingsItems,
+            prevTotal: prevChecking + (currentSavings - savingsDeposit),
+            netChange: monthlyNet
         });
     }
     return data;
@@ -811,6 +1032,36 @@ function renderSettings() {
                             `).join('')}
                         </div>
                     </div>
+                </div>
+            </section>
+
+            <!-- Account Balances -->
+            <section class="space-y-4">
+                <div class="flex items-center justify-between">
+                    <div class="flex items-center gap-2">
+                        <span class="material-symbols-outlined text-primary">account_balance</span>
+                        <h3 class="text-lg font-bold">יתרות חשבון וחסכונות</h3>
+                    </div>
+                    <button onclick="renderAccountModal()" class="text-primary font-bold text-sm flex items-center gap-1 hover:underline">
+                        <span class="material-symbols-outlined text-sm">add_circle</span>
+                        הוספת חשבון
+                    </button>
+                </div>
+                <div class="space-y-3">
+                    ${state.accountBalances.map(acc => `
+                        <div onclick="renderAccountModal(${JSON.stringify(acc).replace(/"/g, '&quot;')})" class="bg-white p-4 rounded-2xl flex items-center justify-between shadow-sm border border-surface-variant/30 cursor-pointer active:scale-[0.98] transition-all">
+                            <div class="flex items-center gap-4">
+                                <div class="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center text-primary">
+                                    <span class="material-symbols-outlined">${acc.type === 'checking' ? 'account_balance' : 'savings'}</span>
+                                </div>
+                                <div>
+                                    <p class="font-bold">${acc.name}</p>
+                                    <p class="text-[10px] text-on-surface-variant">עודכן לאחרונה: ${new Date(acc.lastUpdated).toLocaleDateString('he-IL')}</p>
+                                </div>
+                            </div>
+                            <span class="font-extrabold text-primary text-lg">${formatCurrency(acc.amount)}</span>
+                        </div>
+                    `).join('')}
                 </div>
             </section>
 
@@ -865,7 +1116,10 @@ function renderSettings() {
                                 </div>
                                 <div>
                                     <p class="font-bold">${item.name}</p>
-                                    <span class="px-2 py-0.5 bg-rose-50 text-rose-700 text-[10px] rounded-full font-bold">חודשי</span>
+                                    <div class="flex items-center gap-2">
+                                        <span class="px-2 py-0.5 bg-rose-50 text-rose-700 text-[10px] rounded-full font-bold">${FREQUENCIES[item.frequency || 'monthly'].label}</span>
+                                        ${item.isVariablePrice ? '<span class="px-2 py-0.5 bg-amber-50 text-amber-700 text-[10px] rounded-full font-bold">מחיר משתנה</span>' : ''}
+                                    </div>
                                 </div>
                             </div>
                             <p class="font-extrabold text-rose-600 text-lg">${formatCurrency(item.amount)}</p>
@@ -885,6 +1139,12 @@ function renderSettings() {
 function updateCycleStartDay(day) {
     state.settings.cycleStartDay = day;
     localStorage.setItem('budget_settings', JSON.stringify(state.settings));
+    saveDataToGAS('updateSettings', state.settings);
+    render();
+}
+
+function switchHomeChart(type) {
+    state.activeHomeChart = type;
     render();
 }
 
@@ -946,15 +1206,32 @@ async function fetchDataFromGAS() {
     if (!state.settings.scriptUrl || !state.settings.secretKey) return;
     
     try {
-        const response = await fetch(`${state.settings.scriptUrl}?secretKey=${state.settings.secretKey}&action=getData`);
+        const response = await fetch(`${state.settings.scriptUrl}?secretKey=${state.settings.secretKey}&action=getBootstrapData`);
+        
+        const contentType = response.headers.get("content-type");
+        if (!contentType || !contentType.includes("application/json")) {
+            const text = await response.text();
+            console.error('Expected JSON but received:', text.substring(0, 100));
+            if (text.includes('<!DOCTYPE')) {
+                alert('שגיאת התחברות ל-Script. וודא שה-URL נכון ושה-Script פורסם כ-Web App עם גישה לכולם (Anyone).');
+            }
+            return;
+        }
+
         const result = await response.json();
         
-        if (result.status === 'success') {
-            state.transactions = result.data.transactions || [];
-            state.savingsGoals = result.data.savingsGoals || [];
-            state.accountBalances = result.data.accountBalances || [];
-            if (result.data.settings) {
-                state.settings = { ...state.settings, ...result.data.settings };
+        if (result.ok) {
+            state.transactions = result.transactions || [];
+            state.savingsGoals = result.savingsGoals || [];
+            state.accountBalances = result.accountBalances || [];
+            if (result.categories) {
+                state.categories = result.categories.map(cat => {
+                    if (typeof cat === 'string') return { name: cat, icon: 'category' };
+                    return cat;
+                });
+            }
+            if (result.settings) {
+                state.settings = { ...state.settings, ...result.settings };
             }
             render();
         } else {
@@ -1027,7 +1304,12 @@ function renderTransactionModal(transaction = null) {
     const html = `
         <div class="space-y-6">
             <div class="flex items-center justify-between mb-2">
-                <h2 class="text-2xl font-black text-primary">${title}</h2>
+                <div class="flex items-center gap-3">
+                    <h2 class="text-2xl font-black text-primary">${title}</h2>
+                    <button onclick="renderCategoryModal()" class="w-8 h-8 flex items-center justify-center rounded-full bg-primary/10 text-primary hover:bg-primary/20 transition-colors" title="הוספת קטגוריה">
+                        <span class="material-symbols-outlined text-sm">add</span>
+                    </button>
+                </div>
                 <button onclick="closeModal()" class="w-10 h-10 flex items-center justify-center rounded-full hover:bg-surface-variant/50">
                     <span class="material-symbols-outlined">close</span>
                 </button>
@@ -1050,27 +1332,54 @@ function renderTransactionModal(transaction = null) {
                     </div>
                 </div>
                 
-                <div class="space-y-1">
-                    <label class="text-xs font-bold text-on-surface-variant uppercase tracking-wider px-1">סוג תנועה</label>
-                    <select name="type" class="w-full h-14 px-4 rounded-2xl bg-surface-variant/30 border-2 border-transparent focus:border-primary focus:bg-white outline-none transition-all appearance-none">
-                        ${Object.entries(TRANSACTION_TYPES).map(([key, val]) => `
-                            <option value="${key}" ${transaction?.type === key ? 'selected' : ''}>${val.label}</option>
-                        `).join('')}
-                    </select>
+                <div class="grid grid-cols-2 gap-4">
+                    <div class="space-y-1">
+                        <label class="text-xs font-bold text-on-surface-variant uppercase tracking-wider px-1">סוג תנועה</label>
+                        <select name="type" id="transaction-type" onchange="toggleFrequencyDisplay(this.value)" class="w-full h-14 px-4 rounded-2xl bg-surface-variant/30 border-2 border-transparent focus:border-primary focus:bg-white outline-none transition-all appearance-none">
+                            ${Object.entries(TRANSACTION_TYPES).map(([key, val]) => `
+                                <option value="${key}" ${transaction?.type === key ? 'selected' : ''}>${val.label}</option>
+                            `).join('')}
+                        </select>
+                    </div>
+                    <div class="space-y-1">
+                        <div class="flex items-center justify-between px-1">
+                            <label class="text-xs font-bold text-on-surface-variant uppercase tracking-wider">קטגוריה</label>
+                            <button type="button" onclick="renderAddCategoryModal()" class="text-[10px] font-bold text-primary hover:underline flex items-center gap-0.5">
+                                <span class="material-symbols-outlined text-xs">add</span>
+                                הוסף חדש
+                            </button>
+                        </div>
+                        <select name="category" class="w-full h-14 px-4 rounded-2xl bg-surface-variant/30 border-2 border-transparent focus:border-primary focus:bg-white outline-none transition-all appearance-none">
+                            <option value="" ${!transaction?.category ? 'selected' : ''}>בחר קטגוריה</option>
+                            ${state.categories.map(cat => `
+                                <option value="${cat.name}" ${transaction?.category === cat.name ? 'selected' : ''}>${cat.name}</option>
+                            `).join('')}
+                        </select>
+                    </div>
                 </div>
-                
-                <div class="space-y-1">
-                    <label class="text-xs font-bold text-on-surface-variant uppercase tracking-wider px-1">קטגוריה</label>
-                    <select name="category" class="w-full h-14 px-4 rounded-2xl bg-surface-variant/30 border-2 border-transparent focus:border-primary focus:bg-white outline-none transition-all appearance-none">
-                        ${state.categories.map(cat => `
-                            <option value="${cat}" ${transaction?.category === cat ? 'selected' : ''}>${cat}</option>
-                        `).join('')}
-                    </select>
+
+                <div id="frequency-section" class="${transaction?.type?.startsWith('fixed') ? '' : 'hidden'} space-y-4">
+                    <div class="space-y-1">
+                        <label class="text-xs font-bold text-on-surface-variant uppercase tracking-wider px-1">תדירות</label>
+                        <select name="frequency" class="w-full h-14 px-4 rounded-2xl bg-surface-variant/30 border-2 border-transparent focus:border-primary focus:bg-white outline-none transition-all appearance-none">
+                            ${Object.entries(FREQUENCIES).map(([key, val]) => `
+                                <option value="${key}" ${transaction?.frequency === key ? 'selected' : ''}>${val.label}</option>
+                            `).join('')}
+                        </select>
+                    </div>
+
+                    <div id="variable-price-section" class="${transaction?.type === 'fixed_expense' ? '' : 'hidden'} flex items-center justify-between bg-surface-variant/10 p-4 rounded-2xl border border-surface-variant/30">
+                        <div class="flex flex-col">
+                            <label for="isVariablePrice" class="text-sm font-bold">מחיר משתנה</label>
+                            <p class="text-[10px] text-on-surface-variant">הוצאה שסכומה משתנה (כמו חשמל)</p>
+                        </div>
+                        <input type="checkbox" id="isVariablePrice" name="isVariablePrice" ${transaction?.isVariablePrice ? 'checked' : ''} class="w-6 h-6 rounded-full border-surface-variant text-primary focus:ring-primary">
+                    </div>
                 </div>
 
                 <div class="flex items-center gap-2 py-2">
-                    <input type="checkbox" id="isRecurring" name="isRecurring" ${transaction?.isRecurring ? 'checked' : ''} class="w-5 h-5 rounded border-surface-variant text-primary focus:ring-primary">
-                    <label for="isRecurring" class="text-sm font-bold">תנועה קבועה (מדי חודש)</label>
+                    <input type="checkbox" id="isRecurring" name="isRecurring" ${transaction?.isRecurring || transaction?.type?.startsWith('fixed') ? 'checked' : ''} class="w-5 h-5 rounded border-surface-variant text-primary focus:ring-primary">
+                    <label for="isRecurring" class="text-sm font-bold">תנועה קבועה</label>
                 </div>
                 
                 <div class="pt-4 flex gap-3">
@@ -1092,14 +1401,20 @@ function renderTransactionModal(transaction = null) {
     document.getElementById('transaction-form').onsubmit = (e) => {
         e.preventDefault();
         const formData = new FormData(e.target);
+        const type = formData.get('type');
+        const isVariablePrice = formData.get('isVariablePrice') === 'on';
+        
         const data = {
             id: transaction?.id || Date.now().toString(),
             name: formData.get('name'),
             amount: parseFloat(formData.get('amount')),
             date: formData.get('date'),
-            type: formData.get('type'),
+            type: type,
             category: formData.get('category'),
-            isRecurring: formData.get('isRecurring') === 'on',
+            isRecurring: formData.get('isRecurring') === 'on' || type.startsWith('fixed'),
+            frequency: type.startsWith('fixed') ? formData.get('frequency') : null,
+            isVariablePrice: type === 'fixed_expense' ? isVariablePrice : false,
+            lastMonthAmount: (isVariablePrice && isEdit) ? transaction.amount : (transaction?.lastMonthAmount || 0),
             desc: formData.get('name')
         };
         
@@ -1107,6 +1422,24 @@ function renderTransactionModal(transaction = null) {
     };
 }
 
+function toggleFrequencyDisplay(type) {
+    const freqSection = document.getElementById('frequency-section');
+    const varPriceSection = document.getElementById('variable-price-section');
+    const isRecurringCheckbox = document.getElementById('isRecurring');
+    
+    if (type.startsWith('fixed')) {
+        freqSection.classList.remove('hidden');
+        isRecurringCheckbox.checked = true;
+        if (type === 'fixed_expense') {
+            varPriceSection.classList.remove('hidden');
+        } else {
+            varPriceSection.classList.add('hidden');
+        }
+    } else {
+        freqSection.classList.add('hidden');
+        isRecurringCheckbox.checked = false;
+    }
+}
 function handleSaveTransaction(data, isEdit) {
     if (isEdit) {
         state.transactions = state.transactions.map(t => t.id === data.id ? data : t);
@@ -1126,6 +1459,74 @@ function handleDeleteTransaction(id) {
         closeModal();
         render();
     }
+}
+
+function renderAddCategoryModal() {
+    const html = `
+        <div class="space-y-6">
+            <div class="flex items-center justify-between mb-2">
+                <h2 class="text-2xl font-black text-primary">קטגוריה חדשה</h2>
+                <button onclick="closeModal()" class="w-10 h-10 flex items-center justify-center rounded-full hover:bg-surface-variant/50">
+                    <span class="material-symbols-outlined">close</span>
+                </button>
+            </div>
+            
+            <form id="category-form" class="space-y-4">
+                <div class="space-y-1">
+                    <label class="text-xs font-bold text-on-surface-variant uppercase tracking-wider px-1">שם הקטגוריה</label>
+                    <input type="text" id="new-category-name" required class="w-full h-14 px-4 rounded-2xl bg-surface-variant/30 border-2 border-transparent focus:border-primary focus:bg-white outline-none transition-all" placeholder="למשל: חדר כושר">
+                </div>
+                
+                <div class="space-y-1">
+                    <label class="text-xs font-bold text-on-surface-variant uppercase tracking-wider px-1">אייקון</label>
+                    <div class="grid grid-cols-6 gap-2 max-h-48 overflow-y-auto p-2 bg-surface-variant/10 rounded-2xl">
+                        ${['restaurant', 'sports_esports', 'directions_car', 'medical_services', 'shopping_bag', 'home', 'school', 'redeem', 'verified_user', 'category', 'fitness_center', 'movie', 'flight', 'pets', 'work', 'build', 'payments', 'account_balance', 'local_gas_station', 'fastfood'].map(icon => `
+                            <button type="button" onclick="selectCategoryIcon('${icon}')" class="category-icon-btn w-full aspect-square rounded-xl flex items-center justify-center hover:bg-primary/10 transition-all border-2 border-transparent" data-icon="${icon}">
+                                <span class="material-symbols-outlined">${icon}</span>
+                            </button>
+                        `).join('')}
+                    </div>
+                    <input type="hidden" id="new-category-icon" value="category">
+                </div>
+                
+                <button type="submit" class="w-full h-14 bg-primary text-on-primary rounded-2xl font-bold text-lg shadow-lg shadow-primary/20 active:scale-95 transition-all mt-4">
+                    הוספת קטגוריה
+                </button>
+            </form>
+        </div>
+    `;
+    
+    openModal(html);
+    
+    document.getElementById('category-form').onsubmit = (e) => {
+        e.preventDefault();
+        const name = document.getElementById('new-category-name').value.trim();
+        const icon = document.getElementById('new-category-icon').value;
+        if (name) {
+            handleSaveCategory({ name, icon });
+        }
+    };
+}
+
+function selectCategoryIcon(icon) {
+    document.querySelectorAll('.category-icon-btn').forEach(btn => {
+        btn.classList.remove('border-primary', 'bg-primary/10');
+        if (btn.dataset.icon === icon) {
+            btn.classList.add('border-primary', 'bg-primary/10');
+        }
+    });
+    document.getElementById('new-category-icon').value = icon;
+}
+
+function handleSaveCategory(category) {
+    if (state.categories.find(c => c.name === category.name)) {
+        alert('קטגוריה זו כבר קיימת');
+        return;
+    }
+    state.categories.push(category);
+    saveDataToGAS('addCategory', category);
+    closeModal();
+    render();
 }
 
 function renderSavingsModal(goal = null) {
@@ -1249,6 +1650,42 @@ function handleDeleteSavings(id) {
     }
 }
 
+function renderCategoryModal() {
+    const html = `
+        <div class="space-y-6">
+            <div class="flex items-center justify-between mb-2">
+                <h2 class="text-2xl font-black text-primary">קטגוריה חדשה</h2>
+                <button onclick="closeModal()" class="w-10 h-10 flex items-center justify-center rounded-full hover:bg-surface-variant/50">
+                    <span class="material-symbols-outlined">close</span>
+                </button>
+            </div>
+            
+            <form id="category-form" class="space-y-4">
+                <div class="space-y-1">
+                    <label class="text-xs font-bold text-on-surface-variant uppercase tracking-wider px-1">שם הקטגוריה</label>
+                    <input type="text" name="name" required class="w-full h-14 px-4 rounded-2xl bg-surface-variant/30 border-2 border-transparent focus:border-primary focus:bg-white outline-none transition-all">
+                </div>
+                
+                <button type="submit" class="w-full h-14 bg-primary text-on-primary rounded-2xl font-bold text-lg shadow-lg shadow-primary/20 active:scale-95 transition-all">
+                    הוספת קטגוריה
+                </button>
+            </form>
+        </div>
+    `;
+    
+    openModal(html);
+    
+    document.getElementById('category-form').onsubmit = (e) => {
+        e.preventDefault();
+        const name = new FormData(e.target).get('name');
+        if (name && !state.categories.includes(name)) {
+            state.categories.push(name);
+            saveDataToGAS('addCategory', { name });
+            closeModal();
+            renderTransactionModal(); // Re-open transaction modal to show new category
+        }
+    };
+}
 function renderAccountModal(account = null) {
     const isEdit = !!account;
     const title = isEdit ? 'עריכת חשבון' : 'חשבון חדש';
@@ -1268,29 +1705,29 @@ function renderAccountModal(account = null) {
                     <input type="text" name="name" value="${account?.name || ''}" required class="w-full h-14 px-4 rounded-2xl bg-surface-variant/30 border-2 border-transparent focus:border-primary focus:bg-white outline-none transition-all">
                 </div>
                 
-                <div class="space-y-1">
-                    <label class="text-xs font-bold text-on-surface-variant uppercase tracking-wider px-1">יתרה נוכחית</label>
-                    <input type="number" name="amount" value="${account?.amount || ''}" required class="w-full h-14 px-4 rounded-2xl bg-surface-variant/30 border-2 border-transparent focus:border-primary focus:bg-white outline-none transition-all">
+                <div class="grid grid-cols-2 gap-4">
+                    <div class="space-y-1">
+                        <label class="text-xs font-bold text-on-surface-variant uppercase tracking-wider px-1">סכום נוכחי</label>
+                        <input type="number" step="0.01" name="amount" value="${account?.amount || ''}" required class="w-full h-14 px-4 rounded-2xl bg-surface-variant/30 border-2 border-transparent focus:border-primary focus:bg-white outline-none transition-all">
+                    </div>
+                    <div class="space-y-1">
+                        <label class="text-xs font-bold text-on-surface-variant uppercase tracking-wider px-1">סוג חשבון</label>
+                        <select name="type" class="w-full h-14 px-4 rounded-2xl bg-surface-variant/30 border-2 border-transparent focus:border-primary focus:bg-white outline-none transition-all appearance-none">
+                            <option value="checking" ${account?.type === 'checking' ? 'selected' : ''}>עו״ש</option>
+                            <option value="savings" ${account?.type === 'savings' ? 'selected' : ''}>חיסכון / השקעה</option>
+                        </select>
+                    </div>
                 </div>
                 
-                <div class="space-y-1">
-                    <label class="text-xs font-bold text-on-surface-variant uppercase tracking-wider px-1">סוג חשבון</label>
-                    <select name="type" class="w-full h-14 px-4 rounded-2xl bg-surface-variant/30 border-2 border-transparent focus:border-primary focus:bg-white outline-none transition-all appearance-none">
-                        <option value="checking" ${account?.type === 'checking' ? 'selected' : ''}>עו״ש</option>
-                        <option value="savings" ${account?.type === 'savings' ? 'selected' : ''}>חיסכון / השקעה</option>
-                    </select>
-                </div>
-                
-                <div class="pt-4 flex gap-3">
-                    <button type="submit" class="flex-1 h-14 bg-primary text-on-primary rounded-2xl font-bold text-lg shadow-lg shadow-primary/20 active:scale-95 transition-all">
-                        ${isEdit ? 'עדכון חשבון' : 'הוספת חשבון'}
+                <button type="submit" class="w-full h-14 bg-primary text-on-primary rounded-2xl font-bold text-lg shadow-lg shadow-primary/20 active:scale-95 transition-all">
+                    ${isEdit ? 'עדכון חשבון' : 'הוספת חשבון'}
+                </button>
+                ${isEdit ? `
+                    <button type="button" onclick="handleDeleteAccount('${account.id}')" class="w-full h-14 bg-rose-50 text-rose-600 rounded-2xl font-bold flex items-center justify-center gap-2 active:bg-rose-100 transition-all">
+                        <span class="material-symbols-outlined">delete</span>
+                        מחיקת חשבון
                     </button>
-                    ${isEdit ? `
-                        <button type="button" onclick="handleDeleteAccount('${account.id}')" class="w-14 h-14 bg-rose-50 text-rose-600 rounded-2xl flex items-center justify-center active:scale-95 transition-all">
-                            <span class="material-symbols-outlined">delete</span>
-                        </button>
-                    ` : ''}
-                </div>
+                ` : ''}
             </form>
         </div>
     `;
@@ -1300,7 +1737,6 @@ function renderAccountModal(account = null) {
     document.getElementById('account-form').onsubmit = (e) => {
         e.preventDefault();
         const formData = new FormData(e.target);
-        
         const data = {
             id: account?.id || Date.now().toString(),
             name: formData.get('name'),
@@ -1333,15 +1769,16 @@ function handleDeleteAccount(id) {
         render();
     }
 }
-
 // --- Event Handlers ---
 function handleLogin() {
+    const scriptUrl = document.getElementById('scriptUrl').value;
     const secretKey = document.getElementById('secretKey').value;
     
     if (scriptUrl && secretKey) {
         state.settings.scriptUrl = scriptUrl;
         state.settings.secretKey = secretKey;
         localStorage.setItem('budget_settings', JSON.stringify(state.settings));
+        fetchDataFromGAS();
         render();
     } else {
         alert('אנא הזן כתובת Script ומפתח סודי');
@@ -1353,78 +1790,177 @@ function attachEventListeners() {
 }
 
 function initCharts() {
-    if (state.currentPath === '/forecast') {
-        const ctx = document.getElementById('growthChart');
-        if (!ctx) return;
+    const basePath = state.currentPath.split('?')[0];
+    
+    if (basePath === '/' || basePath === '') {
+        initHomeCharts();
+    } else if (basePath === '/forecast') {
+        initForecastChart();
+    }
+}
 
-        const forecastData = generateForecastData();
-        
-        new Chart(ctx, {
-            type: 'bar',
+function initHomeCharts() {
+    const categoryCtx = document.getElementById('categoryChart');
+    const trendCtx = document.getElementById('trendChart');
+    
+    if (categoryCtx) {
+        // Category Breakdown Data
+        const currentTransactions = getFilteredTransactions('all');
+        const expenses = currentTransactions.filter(t => t.type.includes('expense'));
+        const categoryTotals = {};
+        expenses.forEach(t => {
+            const cat = t.category || 'אחר';
+            categoryTotals[cat] = (categoryTotals[cat] || 0) + t.amount;
+        });
+
+        const categoryLabels = Object.keys(categoryTotals);
+        const categoryData = Object.values(categoryTotals);
+
+        new Chart(categoryCtx, {
+            type: 'doughnut',
             data: {
-                labels: forecastData.map(d => d.month),
-                datasets: [
-                    {
-                        label: 'נכסים',
-                        data: forecastData.map(d => d.checking),
-                        backgroundColor: '#FFB74D', // Pastel Orange
-                        borderRadius: 4,
-                        stack: 'Stack 0',
-                    },
-                    {
-                        label: 'חיסכון',
-                        data: forecastData.map(d => d.savings),
-                        backgroundColor: '#64B5F6', // Pastel Blue
-                        borderRadius: 4,
-                        stack: 'Stack 0',
-                    }
-                ]
+                labels: categoryLabels,
+                datasets: [{
+                    data: categoryData,
+                    backgroundColor: ['#64B5F6', '#FFB74D', '#81C784', '#E57373', '#BA68C8', '#4DB6AC', '#FFF176'],
+                    borderWidth: 0,
+                    cutout: '75%'
+                }]
             },
             options: {
                 responsive: true,
                 maintainAspectRatio: false,
                 plugins: {
-                    legend: {
-                        position: 'top',
-                        rtl: true,
-                        labels: {
-                            font: { family: 'Assistant', weight: 'bold' }
-                        }
-                    },
-                    tooltip: {
-                        rtl: true,
-                        callbacks: {
-                            label: function(context) {
-                                let label = context.dataset.label || '';
-                                if (label) {
-                                    label += ': ';
-                                }
-                                if (context.parsed.y !== null) {
-                                    label += formatCurrency(context.parsed.y);
-                                }
-                                return label;
-                            }
-                        }
-                    }
+                    legend: { display: false }
+                }
+            }
+        });
+    }
+
+    if (trendCtx) {
+        // Monthly Trend Data (Last 6 months)
+        const trendData = [];
+        const labels = [];
+        for (let i = 5; i >= 0; i--) {
+            const d = new Date();
+            d.setMonth(d.getMonth() - i);
+            const monthName = d.toLocaleDateString('he-IL', { month: 'short' });
+            labels.push(monthName);
+            
+            const monthTransactions = getFilteredTransactions('all', d);
+            const monthExpenses = monthTransactions
+                .filter(t => t.type.includes('expense'))
+                .reduce((sum, t) => sum + t.amount, 0);
+            trendData.push(monthExpenses);
+        }
+
+        new Chart(trendCtx, {
+            type: 'line',
+            data: {
+                labels: labels,
+                datasets: [{
+                    label: 'הוצאות',
+                    data: trendData,
+                    borderColor: '#64B5F6',
+                    backgroundColor: 'rgba(100, 181, 246, 0.1)',
+                    fill: true,
+                    tension: 0.4,
+                    pointRadius: 4,
+                    pointBackgroundColor: '#64B5F6'
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { display: false },
+                    tooltip: { rtl: true }
                 },
                 scales: {
-                    x: {
-                        stacked: true,
-                        grid: { display: false }
-                    },
-                    y: {
-                        stacked: true,
+                    x: { grid: { display: false } },
+                    y: { 
                         beginAtZero: true,
                         ticks: {
-                            callback: function(value) {
-                                return formatCurrency(value, false);
-                            }
+                            callback: (value) => formatCurrency(value, false)
                         }
                     }
                 }
             }
         });
     }
+}
+
+function initForecastChart() {
+    const ctx = document.getElementById('growthChart');
+    if (!ctx) return;
+
+    const forecastData = generateForecastData();
+    
+    new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: forecastData.map(d => d.month),
+            datasets: [
+                {
+                    label: 'נכסים',
+                    data: forecastData.map(d => d.checking),
+                    backgroundColor: '#FFB74D', // Pastel Orange
+                    borderRadius: 4,
+                    stack: 'Stack 0',
+                },
+                {
+                    label: 'חיסכון',
+                    data: forecastData.map(d => d.savings),
+                    backgroundColor: '#64B5F6', // Pastel Blue
+                    borderRadius: 4,
+                    stack: 'Stack 0',
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    position: 'top',
+                    rtl: true,
+                    labels: {
+                        font: { family: 'Assistant', weight: 'bold' }
+                    }
+                },
+                tooltip: {
+                    rtl: true,
+                    callbacks: {
+                        label: function(context) {
+                            let label = context.dataset.label || '';
+                            if (label) {
+                                label += ': ';
+                            }
+                            if (context.parsed.y !== null) {
+                                label += formatCurrency(context.parsed.y);
+                            }
+                            return label;
+                        }
+                    }
+                }
+            },
+            scales: {
+                x: {
+                    stacked: true,
+                    grid: { display: false }
+                },
+                y: {
+                    stacked: true,
+                    beginAtZero: true,
+                    ticks: {
+                        callback: function(value) {
+                            return formatCurrency(value, false);
+                        }
+                    }
+                }
+            }
+        }
+    });
 }
 
 // --- Initialization ---

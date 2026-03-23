@@ -1206,7 +1206,7 @@ async function fetchDataFromGAS() {
     if (!state.settings.scriptUrl || !state.settings.secretKey) return;
     
     try {
-        const response = await fetch(`${state.settings.scriptUrl}?secretKey=${state.settings.secretKey}&action=getBootstrapData`);
+        const response = await fetch(`${state.settings.scriptUrl}?secret=${encodeURIComponent(state.settings.secretKey)}&action=getBootstrapData`);
         
         const contentType = response.headers.get("content-type");
         if (!contentType || !contentType.includes("application/json")) {
@@ -1256,7 +1256,7 @@ async function saveDataToGAS(action, data) {
                 'Content-Type': 'application/json',
             },
             body: JSON.stringify({
-                secretKey: state.settings.secretKey,
+                secret: state.settings.secretKey,
                 action: action,
                 data: data
             })

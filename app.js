@@ -137,6 +137,24 @@ function parseDateLocal(dateStr) {
     return new Date(year, month - 1, day);
 }
 
+function getGoalRemainingMonths(goal) {
+    const target = Number(goal?.target) || 0;
+    const current = Number(goal?.current) || 0;
+    const monthly = Number(goal?.monthlyAmount) || 0;
+    const remainingAmount = Math.max(0, target - current);
+
+    if (remainingAmount <= 0) return 0;
+    if (monthly <= 0) return Number(goal?.durationMonths) || 120;
+    return Math.ceil(remainingAmount / monthly);
+}
+
+function getGoalEstimatedEndDate(goal, fromDate = new Date()) {
+    const monthsRemaining = getGoalRemainingMonths(goal);
+    const endDate = new Date(fromDate.getFullYear(), fromDate.getMonth(), 1);
+    endDate.setMonth(endDate.getMonth() + monthsRemaining);
+    return endDate;
+}
+
 function getCycleDates(date = new Date()) {
     const currentMonth = date.getMonth();
     const currentYear = date.getFullYear();
@@ -573,9 +591,10 @@ function renderHome() {
                             </button>
                         </div>
                     ` : `
-                        <div class="h-32 relative w-full">
+                        <div class="h-40 relative w-full">
                             <canvas id="trendChart"></canvas>
                         </div>
+                        <p id="trendAverageText" class="mt-2 text-center text-[11px] text-on-surface-variant font-medium"></p>
                     `}
                 </div>
             </section>
@@ -728,14 +747,14 @@ function renderSavings() {
                     ${state.savingsGoals.map(goal => {
                         const progress = (goal.current / goal.target) * 100;
                         const startDate = goal.startDate ? new Date(goal.startDate) : new Date();
-                        const duration = goal.durationMonths || 12;
-                        const endDate = new Date(startDate);
-                        endDate.setMonth(endDate.getMonth() + duration);
+                        const remainingMonths = getGoalRemainingMonths(goal);
+                        const elapsedMonths = Math.max(0, (new Date().getFullYear() - startDate.getFullYear()) * 12 + (new Date().getMonth() - startDate.getMonth()));
+                        const totalPlanMonths = Math.max(1, elapsedMonths + remainingMonths);
+                        const endDate = getGoalEstimatedEndDate(goal);
                         
                         const now = new Date();
                         const currentMonthStr = now.toLocaleDateString('he-IL', { month: 'short', year: '2-digit' });
-                        const elapsedMonths = (now.getFullYear() - startDate.getFullYear()) * 12 + (now.getMonth() - startDate.getMonth());
-                        const timeProgress = Math.min(100, Math.max(0, (elapsedMonths / duration) * 100));
+                        const timeProgress = Math.min(100, Math.max(0, (elapsedMonths / totalPlanMonths) * 100));
 
                         return `
                             <div onclick="renderSavingsModal(${JSON.stringify(goal).replace(/"/g, '&quot;')})" class="bg-white p-6 rounded-3xl border border-surface-variant/30 shadow-sm space-y-6 group hover:border-primary/20 transition-colors relative overflow-hidden cursor-pointer active:scale-[0.98]">
@@ -754,6 +773,9 @@ function renderSavings() {
                                         <span class="text-xs font-black px-3 py-1 rounded-full shadow-sm ${goal.container} ${goal.onContainer}">
                                             ${Math.round(progress)}%
                                         </span>
+                                        <button onclick="handleExtraDepositClick(event, '${goal.id}')" class="mt-2 text-[10px] font-bold px-2 py-1 rounded-full bg-primary/10 text-primary hover:bg-primary/20 transition-colors">
+                                            הפקדה נוספת
+                                        </button>
                                     </div>
                                 </div>
                                 
@@ -848,7 +870,7 @@ function renderForecast() {
             <div class="space-y-4">
                 <div class="px-2">
                     <h3 class="text-2xl font-bold">מגמת צמיחה משוערת</h3>
-                    <p class="text-on-surface-variant text-sm">תחזית צמיחת הנכסים והחסכונות שלך ל-12 החודשים הקרובים.</p>
+                    <p class="text-on-surface-variant text-sm">תחזית צמיחת הנכסים בעו״ש והחסכונות שלך ל-12 החודשים הקרובים.</p>
                 </div>
                 <div class="bg-white p-6 rounded-3xl border border-surface-variant/30 shadow-sm">
                     <div class="h-72 w-full">
@@ -1066,8 +1088,9 @@ function generateForecastData() {
         const savingsDepositFromGoals = state.savingsGoals.reduce((sum, goal) => {
             const startDate = new Date(goal.startDate || '2026-01-01');
             const monthsPassed = (year - startDate.getFullYear()) * 12 + (monthIndex - startDate.getMonth());
+            const effectiveDuration = getGoalRemainingMonths(goal);
             
-            if (monthsPassed >= 0 && monthsPassed < (goal.durationMonths || 120)) {
+            if (monthsPassed >= 0 && monthsPassed < effectiveDuration) {
                 savingsItems.push({ name: goal.name, amount: goal.monthlyAmount || 0 });
                 return sum + (goal.monthlyAmount || 0);
             }
@@ -1817,6 +1840,84 @@ function handleSaveSavings(data, isEdit) {
     render();
 }
 
+function handleExtraDepositClick(event, goalId) {
+    if (event) event.stopPropagation();
+    renderExtraDepositModal(goalId);
+}
+
+function renderExtraDepositModal(goalId) {
+    const goal = state.savingsGoals.find(g => g.id === goalId);
+    if (!goal) return;
+
+    const html = `
+        <div class="space-y-6">
+            <div class="flex items-center justify-between mb-2">
+                <h2 class="text-2xl font-black text-primary">הפקדה נוספת</h2>
+                <button onclick="closeModal()" class="w-10 h-10 flex items-center justify-center rounded-full hover:bg-surface-variant/50">
+                    <span class="material-symbols-outlined">close</span>
+                </button>
+            </div>
+
+            <div class="bg-surface-variant/10 rounded-2xl p-4">
+                <p class="text-xs text-on-surface-variant font-bold">יעד</p>
+                <p class="text-lg font-extrabold">${goal.name}</p>
+                <p class="text-xs text-on-surface-variant mt-1">סכום נוכחי: ${formatCurrency(goal.current)}</p>
+            </div>
+            
+            <form id="extra-deposit-form" class="space-y-4">
+                <div class="grid grid-cols-2 gap-4">
+                    <div class="space-y-1">
+                        <label class="text-xs font-bold text-on-surface-variant uppercase tracking-wider px-1">סכום הפקדה</label>
+                        <input type="number" step="0.01" name="amount" min="0.01" required class="w-full h-14 px-4 rounded-2xl bg-surface-variant/30 border-2 border-transparent focus:border-primary focus:bg-white outline-none transition-all">
+                    </div>
+                    <div class="space-y-1">
+                        <label class="text-xs font-bold text-on-surface-variant uppercase tracking-wider px-1">תאריך</label>
+                        <input type="date" name="date" value="${formatDateLocal(new Date())}" required class="w-full h-14 px-4 rounded-2xl bg-surface-variant/30 border-2 border-transparent focus:border-primary focus:bg-white outline-none transition-all">
+                    </div>
+                </div>
+
+                <button type="submit" class="w-full h-14 bg-primary text-on-primary rounded-2xl font-bold text-lg shadow-lg shadow-primary/20 active:scale-95 transition-all">
+                    שמירת הפקדה
+                </button>
+            </form>
+        </div>
+    `;
+
+    openModal(html);
+
+    document.getElementById('extra-deposit-form').onsubmit = (e) => {
+        e.preventDefault();
+        const formData = new FormData(e.target);
+        const amount = Number(formData.get('amount'));
+        const date = String(formData.get('date') || formatDateLocal(new Date()));
+        if (!amount || amount <= 0) return;
+
+        const updatedGoal = {
+            ...goal,
+            current: (Number(goal.current) || 0) + amount
+        };
+        state.savingsGoals = state.savingsGoals.map(g => g.id === goal.id ? updatedGoal : g);
+        saveDataToGAS('updateSavingsGoal', updatedGoal);
+
+        const depositTransaction = {
+            id: Date.now().toString(),
+            name: `הפקדה נוספת: ${goal.name}`,
+            amount: amount,
+            type: 'savings_deposit',
+            date: date,
+            category: 'הפרשות לחסכון',
+            isRecurring: false,
+            goalId: goal.id,
+            desc: 'הפקדה נוספת ידנית'
+        };
+        state.transactions.push(depositTransaction);
+        saveDataToGAS('addTransaction', depositTransaction);
+
+        closeModal();
+        render();
+    };
+}
+
 function handleDeleteSavings(id) {
     if (confirm('האם אתה בטוח שברצונך למחוק יעד זה?')) {
         state.savingsGoals = state.savingsGoals.filter(g => g.id !== id);
@@ -2014,10 +2115,10 @@ function initHomeCharts() {
     }
 
     if (trendCtx) {
-        // Monthly Trend Data (Last 6 months)
+        // Monthly Trend Data (Last 5 months) in column style
         const trendData = [];
         const labels = [];
-        for (let i = 5; i >= 0; i--) {
+        for (let i = 4; i >= 0; i--) {
             const d = new Date();
             d.setMonth(d.getMonth() - i);
             const monthName = d.toLocaleDateString('he-IL', { month: 'short' });
@@ -2030,35 +2131,71 @@ function initHomeCharts() {
             trendData.push(monthExpenses);
         }
 
+        const gradient = trendCtx.getContext('2d').createLinearGradient(0, 0, 0, 220);
+        gradient.addColorStop(0, 'rgba(169, 228, 236, 0.95)');
+        gradient.addColorStop(1, 'rgba(169, 228, 236, 0.45)');
+
+        const avg = trendData.length ? trendData.reduce((a, b) => a + b, 0) / trendData.length : 0;
+        const avgLabel = document.getElementById('trendAverageText');
+        if (avgLabel) {
+            avgLabel.textContent = `ממוצע חיובים של ${trendData.length} החודשים האחרונים: ${formatCurrency(avg, false)}`;
+        }
+
+        const valueLabelsPlugin = {
+            id: 'valueLabelsPlugin',
+            afterDatasetsDraw(chart) {
+                const { ctx } = chart;
+                ctx.save();
+                ctx.fillStyle = '#2f2f33';
+                ctx.font = '600 11px Assistant, sans-serif';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'bottom';
+
+                const meta = chart.getDatasetMeta(0);
+                meta.data.forEach((bar, index) => {
+                    const value = trendData[index] || 0;
+                    ctx.fillText(formatCurrency(value, false), bar.x, bar.y - 4);
+                });
+                ctx.restore();
+            }
+        };
+
         new Chart(trendCtx, {
-            type: 'line',
+            type: 'bar',
             data: {
                 labels: labels,
                 datasets: [{
-                    label: 'הוצאות',
+                    label: 'חיובים',
                     data: trendData,
-                    borderColor: '#64B5F6',
-                    backgroundColor: 'rgba(100, 181, 246, 0.1)',
-                    fill: true,
-                    tension: 0.4,
-                    pointRadius: 4,
-                    pointBackgroundColor: '#64B5F6'
+                    backgroundColor: gradient,
+                    borderWidth: 0,
+                    borderRadius: 6,
+                    barPercentage: 0.66,
+                    categoryPercentage: 0.72
                 }]
             },
+            plugins: [valueLabelsPlugin],
             options: {
                 responsive: true,
                 maintainAspectRatio: false,
                 plugins: {
                     legend: { display: false },
-                    tooltip: { rtl: true }
+                    tooltip: { rtl: true, displayColors: false }
                 },
                 scales: {
-                    x: { grid: { display: false } },
+                    x: {
+                        grid: { display: false },
+                        ticks: {
+                            color: '#1f1f24',
+                            font: { size: 13, weight: '700' }
+                        },
+                        border: { display: false }
+                    },
                     y: { 
                         beginAtZero: true,
-                        ticks: {
-                            callback: (value) => formatCurrency(value, false)
-                        }
+                        grid: { display: false },
+                        border: { display: false },
+                        ticks: { display: false }
                     }
                 }
             }
@@ -2078,7 +2215,7 @@ function initForecastChart() {
             labels: forecastData.map(d => d.month),
             datasets: [
                 {
-                    label: 'נכסים',
+                    label: 'נכסים בעו״ש',
                     data: forecastData.map(d => d.checking),
                     backgroundColor: '#FFB74D', // Pastel Orange
                     borderRadius: 4,

@@ -588,9 +588,11 @@ function renderTransactions() {
     
     const transactions = getFilteredTransactions(filterType);
     const categoryFiltered = selectedCategory === 'all' ? transactions : transactions.filter(t => t.category === selectedCategory);
-    
-    const income = transactions.filter(t => t.type.includes('income')).reduce((sum, t) => sum + t.amount, 0);
-    const expenses = transactions.filter(t => t.type.includes('expense') || t.type === 'savings_deposit').reduce((sum, t) => sum + t.amount, 0);
+
+    // "Remaining to spend" must always reflect the full current cycle, not the active list filter.
+    const allCycleTransactions = getFilteredTransactions('all');
+    const income = allCycleTransactions.filter(t => t.type.includes('income')).reduce((sum, t) => sum + t.amount, 0);
+    const expenses = allCycleTransactions.filter(t => t.type.includes('expense') || t.type === 'savings_deposit').reduce((sum, t) => sum + t.amount, 0);
     const remaining = income - expenses;
 
     return `
@@ -713,7 +715,7 @@ function renderSavings() {
             <section class="space-y-4">
                 <div class="flex justify-between items-center px-2">
                     <h3 class="text-2xl font-extrabold tracking-tight">יעדי חיסכון</h3>
-                    <button class="bg-primary text-white px-5 py-2.5 rounded-full font-bold text-sm shadow-md hover:bg-primary/90 transition-all active:scale-95 flex items-center gap-2">
+                    <button onclick="renderSavingsModal()" class="bg-primary text-white px-5 py-2.5 rounded-full font-bold text-sm shadow-md hover:bg-primary/90 transition-all active:scale-95 flex items-center gap-2">
                         <span class="material-symbols-outlined text-lg">add</span>
                         <span>הוסף חיסכון</span>
                     </button>
@@ -1625,13 +1627,18 @@ function renderSavingsModal(goal = null) {
                 
                 <div class="grid grid-cols-2 gap-4">
                     <div class="space-y-1">
+                        <label class="text-xs font-bold text-on-surface-variant uppercase tracking-wider px-1">תאריך התחלה</label>
+                        <input type="date" name="startDate" value="${goal?.startDate || formatDateLocal(new Date())}" required class="w-full h-14 px-4 rounded-2xl bg-surface-variant/30 border-2 border-transparent focus:border-primary focus:bg-white outline-none transition-all">
+                    </div>
+                    <div class="space-y-1">
                         <label class="text-xs font-bold text-on-surface-variant uppercase tracking-wider px-1">הפקדה חודשית</label>
                         <input type="number" name="monthlyAmount" value="${goal?.monthlyAmount || ''}" required class="w-full h-14 px-4 rounded-2xl bg-surface-variant/30 border-2 border-transparent focus:border-primary focus:bg-white outline-none transition-all">
                     </div>
-                    <div class="space-y-1">
+                </div>
+
+                <div class="space-y-1">
                         <label class="text-xs font-bold text-on-surface-variant uppercase tracking-wider px-1">יום הפקדה</label>
                         <input type="number" name="depositDay" value="${goal?.depositDay || '10'}" min="1" max="31" required class="w-full h-14 px-4 rounded-2xl bg-surface-variant/30 border-2 border-transparent focus:border-primary focus:bg-white outline-none transition-all">
-                    </div>
                 </div>
 
                 <div class="space-y-1">
@@ -1676,7 +1683,7 @@ function renderSavingsModal(goal = null) {
             container: selectedColor.container,
             onContainer: selectedColor.onContainer,
             icon: goal?.icon || 'savings',
-            startDate: goal?.startDate || formatDateLocal(new Date())
+            startDate: formData.get('startDate')
         };
         
         handleSaveSavings(data, isEdit);
@@ -1816,10 +1823,10 @@ function renderAccountModal(account = null) {
 function handleSaveAccount(data, isEdit) {
     if (isEdit) {
         state.accountBalances = state.accountBalances.map(a => a.id === data.id ? data : a);
-        saveDataToGAS('updateAccount', data);
+        saveDataToGAS('updateAccountBalance', data);
     } else {
         state.accountBalances.push(data);
-        saveDataToGAS('addAccount', data);
+        saveDataToGAS('addAccountBalance', data);
     }
     closeModal();
     render();
@@ -1828,7 +1835,7 @@ function handleSaveAccount(data, isEdit) {
 function handleDeleteAccount(id) {
     if (confirm('האם אתה בטוח שברצונך למחוק חשבון זה?')) {
         state.accountBalances = state.accountBalances.filter(a => a.id !== id);
-        saveDataToGAS('deleteAccount', { id });
+        saveDataToGAS('deleteAccountBalance', { id });
         closeModal();
         render();
     }

@@ -675,6 +675,7 @@ function renderSavings() {
     const totalTarget = state.savingsGoals.reduce((acc, goal) => acc + goal.target, 0);
     const totalCurrent = state.savingsGoals.reduce((acc, goal) => acc + goal.current, 0);
     const totalRemaining = totalTarget - totalCurrent;
+    const preconfiguredFunds = state.accountBalances.filter(acc => acc.type !== 'checking');
 
     const currentCycleTransactions = getFilteredTransactions('all');
     const monthlySavings = currentCycleTransactions
@@ -784,6 +785,33 @@ function renderSavings() {
                     }).join('')}
                 </div>
             </section>
+
+            ${preconfiguredFunds.length > 0 ? `
+                <section class="space-y-4">
+                    <div class="px-2">
+                        <h3 class="text-xl font-extrabold tracking-tight">קופות קיימות</h3>
+                        <p class="text-on-surface-variant text-sm">יתרות שהוגדרו מראש מתוך ההגדרות.</p>
+                    </div>
+                    <div class="space-y-3">
+                        ${preconfiguredFunds.map(fund => `
+                            <div class="bg-white p-5 rounded-3xl border border-surface-variant/30 shadow-sm">
+                                <div class="flex items-center justify-between">
+                                    <div class="flex items-center gap-3">
+                                        <div class="w-11 h-11 rounded-2xl bg-primary/10 flex items-center justify-center text-primary">
+                                            <span class="material-symbols-outlined">account_balance</span>
+                                        </div>
+                                        <div>
+                                            <p class="font-extrabold text-on-surface">${fund.name}</p>
+                                            <p class="text-xs text-on-surface-variant">קופה שהוגדרה מראש</p>
+                                        </div>
+                                    </div>
+                                    <p class="text-xl font-black text-primary">${formatCurrency(fund.amount)}</p>
+                                </div>
+                            </div>
+                        `).join('')}
+                    </div>
+                </section>
+            ` : ''}
         </div>
     `;
 }

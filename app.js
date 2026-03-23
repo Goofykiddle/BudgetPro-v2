@@ -502,7 +502,7 @@ function renderHome() {
                         return recentTransactions.map(t => {
                             const isExpense = t.type.includes('expense') || t.type === 'savings_deposit';
                             const colorClass = isExpense ? 'bg-rose-50 text-rose-600' : 'bg-emerald-50 text-emerald-600';
-                            const amountSign = isExpense ? '-' : '+';
+                            const amountSign = isExpense ? '-' : '';
                             
                             return `
                                 <div onclick="renderTransactionModal(${JSON.stringify(t).replace(/"/g, '&quot;')})" class="min-w-[150px] bg-white rounded-2xl p-3 border border-surface-variant/30 shadow-sm flex flex-col gap-2 cursor-pointer hover:scale-[1.02] transition-transform">

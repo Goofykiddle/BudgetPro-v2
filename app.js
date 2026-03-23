@@ -841,24 +841,37 @@ function renderForecast() {
                                     <h4 class="text-lg font-extrabold">${item.fullMonth}</h4>
                                 </div>
                                 <div class="text-left group relative">
-                                    <p class="text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">יתרה סופית</p>
-                                    <p class="text-lg font-black text-primary">${formatCurrency(item.total)}</p>
-                                    
+                                    <div class="rounded-2xl px-4 py-2.5 bg-primary-container border border-primary/20 shadow-sm">
+                                        <p class="text-[10px] font-bold text-on-primary-container/70 uppercase tracking-wider">יתרה סופית</p>
+                                        <p class="text-xl font-black text-on-primary-container leading-tight">${formatCurrency(item.total)}</p>
+                                        <p class="text-[10px] text-on-primary-container/70 mt-1">
+                                            עו״ש: ${formatCurrency(item.checking, false)} | חיסכון: ${formatCurrency(item.savings, false)}
+                                        </p>
+                                    </div>
+
                                     <!-- Tooltip -->
-                                    <div class="absolute hidden group-hover:block group-active:block z-20 bottom-full left-0 mb-2 bg-surface-variant p-3 rounded-2xl shadow-xl border border-primary/20 min-w-[180px] text-right animate-in fade-in slide-in-from-bottom-1">
+                                    <div class="absolute hidden group-hover:block group-active:block z-20 bottom-full left-0 mb-2 bg-surface-variant p-3 rounded-2xl shadow-xl border border-primary/20 min-w-[220px] text-right animate-in fade-in slide-in-from-bottom-1">
                                         <p class="font-bold text-xs border-b border-primary/10 pb-1 mb-2">חישוב יתרה</p>
                                         <div class="space-y-1.5">
                                             <div class="flex justify-between gap-4">
-                                                <span class="text-primary font-bold">${formatCurrency(item.prevTotal)}</span>
-                                                <span class="text-on-surface-variant opacity-70">יתרה קודמת:</span>
+                                                <span class="text-primary font-bold">${formatCurrency(item.openingChecking)}</span>
+                                                <span class="text-on-surface-variant opacity-70">עו״ש פתיחה:</span>
+                                            </div>
+                                            <div class="flex justify-between gap-4">
+                                                <span class="text-primary font-bold">${formatCurrency(item.openingSavings)}</span>
+                                                <span class="text-on-surface-variant opacity-70">חיסכון פתיחה:</span>
                                             </div>
                                             <div class="flex justify-between gap-4">
                                                 <span class="${item.netChange >= 0 ? 'text-emerald-600' : 'text-rose-600'} font-bold">${item.netChange >= 0 ? '+' : ''}${formatCurrency(item.netChange)}</span>
-                                                <span class="text-on-surface-variant opacity-70">שינוי נטו:</span>
+                                                <span class="text-on-surface-variant opacity-70">שינוי נטו בעו״ש:</span>
+                                            </div>
+                                            <div class="flex justify-between gap-4">
+                                                <span class="text-blue-600 font-bold">+${formatCurrency(item.saving)}</span>
+                                                <span class="text-on-surface-variant opacity-70">הפרשה לחיסכון:</span>
                                             </div>
                                             <div class="pt-1 border-t border-primary/10 flex justify-between gap-4">
                                                 <span class="text-primary font-black">${formatCurrency(item.total)}</span>
-                                                <span class="text-on-surface-variant font-bold">סה״כ:</span>
+                                                <span class="text-on-surface-variant font-bold">סה״כ סופי:</span>
                                             </div>
                                         </div>
                                     </div>
@@ -935,12 +948,38 @@ function renderForecast() {
 
 function generateForecastData() {
     const data = [];
-    let currentChecking = state.accountBalances.filter(a => a.type === 'checking').reduce((s, a) => s + a.amount, 0);
-    let currentSavings = state.accountBalances.filter(a => a.type !== 'checking').reduce((s, a) => s + a.amount, 0);
+    let currentChecking = state.accountBalances
+        .filter(a => a.type === 'checking')
+        .reduce((s, a) => s + a.amount, 0);
+
+    const existingSavingsFromAccounts = state.accountBalances
+        .filter(a => a.type !== 'checking')
+        .reduce((s, a) => s + a.amount, 0);
+
+    const existingSavingsFromGoals = state.savingsGoals
+        .reduce((s, g) => s + (Number(g.current) || 0), 0);
+
+    let currentSavings = existingSavingsFromAccounts + existingSavingsFromGoals;
     
     const now = new Date();
     const startMonth = state.settings.startMonth !== undefined ? state.settings.startMonth - 1 : now.getMonth();
     const startYear = state.settings.startYear || now.getFullYear();
+    const nowMonth = now.getMonth();
+    const nowYear = now.getFullYear();
+
+    function appliesByFrequency(transaction, monthIndex, year) {
+        const freq = String(transaction.frequency || 'monthly');
+        const tDate = new Date(transaction.date || `${year}-${String(monthIndex + 1).padStart(2, '0')}-01`);
+        const monthsDiff = (year - tDate.getFullYear()) * 12 + (monthIndex - tDate.getMonth());
+        if (monthsDiff < 0) return false;
+
+        if (freq === 'monthly') return true;
+        if (freq === 'bi-monthly') return monthsDiff % 2 === 0;
+        if (freq === 'quarterly') return monthsDiff % 3 === 0;
+        if (freq === 'semi-annually') return monthsDiff % 6 === 0;
+        if (freq === 'annually' || freq === 'annual') return monthsDiff % 12 === 0;
+        return true;
+    }
 
     for (let i = 0; i < 12; i++) {
         const forecastDate = new Date(startYear, startMonth + i, 1);
@@ -951,17 +990,19 @@ function generateForecastData() {
         const fixedIncome = state.transactions
             .filter(t => t.type === 'fixed_income')
             .reduce((sum, t) => {
-                const freq = t.frequency || 'monthly';
-                let included = false;
-                if (freq === 'monthly') included = true;
-                else if (freq === 'bi-monthly') {
-                    const tDate = new Date(t.date);
-                    const monthsDiff = (year - tDate.getFullYear()) * 12 + (monthIndex - tDate.getMonth());
-                    if (monthsDiff % 2 === 0) included = true;
+                if (appliesByFrequency(t, monthIndex, year)) {
+                    incomeItems.push({ name: t.name, amount: t.amount, date: t.date });
+                    return sum + t.amount;
                 }
-                else if (freq === 'annual' && monthIndex === 0) included = true;
+                return sum;
+            }, 0);
 
-                if (included) {
+        // Include additional (non-fixed) incomes only in their exact month.
+        const variableIncome = state.transactions
+            .filter(t => t.type === 'variable_income')
+            .reduce((sum, t) => {
+                const tDate = new Date(t.date);
+                if (tDate.getMonth() === monthIndex && tDate.getFullYear() === year) {
                     incomeItems.push({ name: t.name, amount: t.amount, date: t.date });
                     return sum + t.amount;
                 }
@@ -972,17 +1013,19 @@ function generateForecastData() {
         const fixedExpenses = state.transactions
             .filter(t => t.type === 'fixed_expense')
             .reduce((sum, t) => {
-                const freq = t.frequency || 'monthly';
-                let included = false;
-                if (freq === 'monthly') included = true;
-                else if (freq === 'bi-monthly') {
-                    const tDate = new Date(t.date);
-                    const monthsDiff = (year - tDate.getFullYear()) * 12 + (monthIndex - tDate.getMonth());
-                    if (monthsDiff % 2 === 0) included = true;
+                if (appliesByFrequency(t, monthIndex, year)) {
+                    expenseItems.push({ name: t.name, amount: t.amount, date: t.date });
+                    return sum + t.amount;
                 }
-                else if (freq === 'annual' && monthIndex === 0) included = true;
+                return sum;
+            }, 0);
 
-                if (included) {
+        // Include known variable expenses in their exact month (especially current month expectations).
+        const variableExpenses = state.transactions
+            .filter(t => t.type === 'variable_expense')
+            .reduce((sum, t) => {
+                const tDate = new Date(t.date);
+                if (tDate.getMonth() === monthIndex && tDate.getFullYear() === year) {
                     expenseItems.push({ name: t.name, amount: t.amount, date: t.date });
                     return sum + t.amount;
                 }
@@ -990,7 +1033,7 @@ function generateForecastData() {
             }, 0);
             
         const savingsItems = [];
-        const savingsDeposit = state.savingsGoals.reduce((sum, goal) => {
+        const savingsDepositFromGoals = state.savingsGoals.reduce((sum, goal) => {
             const startDate = new Date(goal.startDate || '2026-01-01');
             const monthsPassed = (year - startDate.getFullYear()) * 12 + (monthIndex - startDate.getMonth());
             
@@ -1000,8 +1043,38 @@ function generateForecastData() {
             }
             return sum;
         }, 0);
+
+        const savingsDepositFromTransactions = state.transactions
+            .filter(t => t.type === 'savings_deposit')
+            .reduce((sum, t) => {
+                if (t.isRecurring || t.type === 'savings_deposit') {
+                    if (t.isRecurring ? appliesByFrequency({ ...t, frequency: t.frequency || 'monthly' }, monthIndex, year) : true) {
+                        const tDate = new Date(t.date);
+                        const exactMonth = tDate.getMonth() === monthIndex && tDate.getFullYear() === year;
+                        if (t.isRecurring || exactMonth) {
+                            savingsItems.push({ name: t.name, amount: t.amount });
+                            return sum + t.amount;
+                        }
+                    }
+                }
+                return sum;
+            }, 0);
+
+        if (i === 0) {
+            if (existingSavingsFromAccounts > 0) {
+                savingsItems.unshift({ name: 'יתרות חיסכון קיימות (קופות/חשבונות)', amount: existingSavingsFromAccounts });
+            }
+            if (existingSavingsFromGoals > 0) {
+                savingsItems.unshift({ name: 'סכום התחלתי ביעדי חיסכון', amount: existingSavingsFromGoals });
+            }
+        }
         
-        const monthlyNet = fixedIncome - fixedExpenses - savingsDeposit;
+        const incomeTotal = fixedIncome + variableIncome;
+        const expenseTotal = fixedExpenses + variableExpenses;
+        const savingsDeposit = savingsDepositFromGoals + savingsDepositFromTransactions;
+        const monthlyNet = incomeTotal - expenseTotal - savingsDeposit;
+        const openingChecking = currentChecking;
+        const openingSavings = currentSavings;
         const prevChecking = currentChecking;
         currentChecking += monthlyNet;
         currentSavings += savingsDeposit;
@@ -1009,8 +1082,8 @@ function generateForecastData() {
         data.push({
             month: forecastDate.toLocaleString('he-IL', { month: 'short' }),
             fullMonth: forecastDate.toLocaleString('he-IL', { month: 'long', year: 'numeric' }),
-            income: fixedIncome,
-            expense: fixedExpenses,
+            income: incomeTotal,
+            expense: expenseTotal,
             saving: savingsDeposit,
             checking: currentChecking,
             savings: currentSavings,
@@ -1018,6 +1091,8 @@ function generateForecastData() {
             incomeItems,
             expenseItems,
             savingsItems,
+            openingChecking,
+            openingSavings,
             prevTotal: prevChecking + (currentSavings - savingsDeposit),
             netChange: monthlyNet
         });

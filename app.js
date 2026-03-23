@@ -1164,7 +1164,7 @@ function handleProfileImageUpload(event) {
             const base64 = e.target.result;
             state.settings.profileImage = base64;
             localStorage.setItem('budget_settings', JSON.stringify(state.settings));
-            saveDataToGAS(); // Save settings to GAS
+            saveDataToGAS('updateSettings', state.settings); // Save settings to GAS
             render();
         };
         reader.readAsDataURL(file);
@@ -1238,13 +1238,19 @@ async function fetchDataFromGAS() {
                 });
             }
             if (result.settings) {
-                state.settings = { ...state.settings, ...result.settings };
+                // Keep local auth fields; server settings may be stale or empty.
+                state.settings = {
+                    ...state.settings,
+                    ...result.settings,
+                    scriptUrl: state.settings.scriptUrl,
+                    secretKey: state.settings.secretKey
+                };
             }
             render();
         } else {
             console.error('Failed to fetch data:', result.message);
             if (result.message === 'Invalid secret key') {
-                logout();
+                console.warn('Secret key rejected by backend. Keeping current session values for retry.');
             }
         }
     } catch (error) {
@@ -1256,20 +1262,21 @@ async function saveDataToGAS(action, data) {
     if (!state.settings.scriptUrl || !state.settings.secretKey) return;
     
     try {
+        const form = new URLSearchParams();
+        form.set('secret', state.settings.secretKey);
+        form.set('action', action);
+        form.set('payload', JSON.stringify(data || {}));
+
         const response = await fetch(state.settings.scriptUrl, {
             method: 'POST',
-            mode: 'no-cors',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-                secret: state.settings.secretKey,
-                action: action,
-                data: data
-            })
+            body: form
         });
-        
-        setTimeout(fetchDataFromGAS, 1000);
+
+        if (!response.ok) {
+            throw new Error(`Save failed with HTTP ${response.status}`);
+        }
+
+        setTimeout(fetchDataFromGAS, 300);
     } catch (error) {
         console.error('Error saving data:', error);
     }
@@ -1978,7 +1985,7 @@ async function init() {
     }
     
     // Initial fetch from GAS if authenticated
-    if (state.isAuthenticated) {
+    if (state.settings.scriptUrl && state.settings.secretKey) {
         try {
             await fetchDataFromGAS();
         } catch (e) {

@@ -1117,7 +1117,7 @@ function renderSettings() {
                                 <div>
                                     <p class="font-bold">${item.name}</p>
                                     <div class="flex items-center gap-2">
-                                        <span class="px-2 py-0.5 bg-rose-50 text-rose-700 text-[10px] rounded-full font-bold">${FREQUENCIES[item.frequency || 'monthly'].label}</span>
+                                        <span class="px-2 py-0.5 bg-rose-50 text-rose-700 text-[10px] rounded-full font-bold">${(FREQUENCIES[item.frequency] || FREQUENCIES.monthly).label}</span>
                                         ${item.isVariablePrice ? '<span class="px-2 py-0.5 bg-amber-50 text-amber-700 text-[10px] rounded-full font-bold">מחיר משתנה</span>' : ''}
                                     </div>
                                 </div>

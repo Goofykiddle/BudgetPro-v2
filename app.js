@@ -76,6 +76,8 @@ const state = {
     activeHomeChart: 'category', // 'category' or 'trend'
     currentPath: window.location.hash.replace('#', '') || '/',
     isLoading: false,
+    loadingCount: 0,
+    loadingMessage: 'טוען נתונים...',
     error: null
 };
 
@@ -251,12 +253,41 @@ function render() {
                 ${renderPage(state.currentPath)}
             </main>
             ${renderBottomNavBar()}
+            ${renderLoadingOverlay()}
         </div>
     `;
 
     // Re-attach event listeners and initialize charts if needed
     attachEventListeners();
     initCharts();
+}
+
+function renderLoadingOverlay() {
+    if (!state.isLoading) return '';
+    return `
+        <div class="fixed inset-0 z-[100] bg-black/35 backdrop-blur-sm flex items-center justify-center p-6">
+            <div class="bg-white rounded-3xl shadow-2xl px-8 py-7 max-w-xs w-full text-center">
+                <div class="w-12 h-12 border-4 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+                <p class="text-sm font-bold text-on-surface">${state.loadingMessage || 'טוען נתונים...'}</p>
+            </div>
+        </div>
+    `;
+}
+
+function startLoading(message) {
+    state.loadingCount = (state.loadingCount || 0) + 1;
+    state.isLoading = true;
+    if (message) state.loadingMessage = message;
+    render();
+}
+
+function stopLoading() {
+    state.loadingCount = Math.max(0, (state.loadingCount || 0) - 1);
+    state.isLoading = state.loadingCount > 0;
+    if (!state.isLoading) {
+        state.loadingMessage = 'טוען נתונים...';
+    }
+    render();
 }
 
 function getPageTitle(path) {
@@ -1136,11 +1167,10 @@ function renderSettings() {
     `;
 }
 
-function updateCycleStartDay(day) {
+async function updateCycleStartDay(day) {
     state.settings.cycleStartDay = day;
     localStorage.setItem('budget_settings', JSON.stringify(state.settings));
-    saveDataToGAS('updateSettings', state.settings);
-    render();
+    await saveDataToGAS('updateSettings', state.settings);
 }
 
 function switchHomeChart(type) {
@@ -1202,9 +1232,11 @@ function renderLogin() {
 }
 
 // --- API Communication ---
-async function fetchDataFromGAS() {
+async function fetchDataFromGAS(options = {}) {
     if (!state.settings.scriptUrl || !state.settings.secretKey) return;
-    
+    const showLoading = options.showLoading !== false;
+    if (showLoading) startLoading(options.loadingMessage || 'טוען נתונים מהקובץ...');
+
     try {
         const response = await fetch(`${state.settings.scriptUrl}?secret=${encodeURIComponent(state.settings.secretKey)}&action=getBootstrapData`);
         
@@ -1255,12 +1287,15 @@ async function fetchDataFromGAS() {
         }
     } catch (error) {
         console.error('Error fetching data:', error);
+    } finally {
+        if (showLoading) stopLoading();
     }
 }
 
 async function saveDataToGAS(action, data) {
     if (!state.settings.scriptUrl || !state.settings.secretKey) return;
-    
+    startLoading('שומר ומסנכרן נתונים...');
+
     try {
         const form = new URLSearchParams();
         form.set('secret', state.settings.secretKey);
@@ -1276,9 +1311,11 @@ async function saveDataToGAS(action, data) {
             throw new Error(`Save failed with HTTP ${response.status}`);
         }
 
-        setTimeout(fetchDataFromGAS, 300);
+        await fetchDataFromGAS({ showLoading: false });
     } catch (error) {
         console.error('Error saving data:', error);
+    } finally {
+        stopLoading();
     }
 }
 
@@ -1994,18 +2031,16 @@ async function init() {
     }
     
     // Initial render
-    setTimeout(() => {
-        const loadingScreen = document.getElementById('loading-screen');
-        if (loadingScreen) {
-            loadingScreen.style.opacity = '0';
-            setTimeout(() => {
-                loadingScreen.remove();
-                render();
-            }, 200);
-        } else {
+    const loadingScreen = document.getElementById('loading-screen');
+    if (loadingScreen) {
+        loadingScreen.style.opacity = '0';
+        setTimeout(() => {
+            loadingScreen.remove();
             render();
-        }
-    }, 1000);
+        }, 200);
+    } else {
+        render();
+    }
 }
 
 init();

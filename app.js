@@ -78,8 +78,20 @@ const state = {
     isLoading: false,
     loadingCount: 0,
     loadingMessage: 'טוען נתונים...',
+    onboardingStep: 0,
+    onboardingData: {
+        name: '',
+        profileType: '',
+        cycleStartDay: 1,
+        checkingBalance: '',
+        fixedIncome: '',
+        fixedExpense: ''
+    },
     error: null
 };
+
+const ONBOARDING_DONE_KEY = 'budget_onboarding_completed_v1';
+const ONBOARDING_DRAFT_KEY = 'budget_onboarding_draft_v1';
 
 // --- Constants ---
 const PASTEL_COLORS = [
@@ -243,7 +255,23 @@ window.addEventListener('hashchange', () => {
 // --- Rendering Engine ---
 function render() {
     const app = document.getElementById('app');
+    const onboardingCompleted = localStorage.getItem(ONBOARDING_DONE_KEY) === '1';
     
+    if (!onboardingCompleted && state.currentPath !== '/onboarding') {
+        navigate('/onboarding');
+        return;
+    }
+
+    if (onboardingCompleted && state.currentPath === '/onboarding') {
+        navigate('/');
+        return;
+    }
+
+    if (state.currentPath === '/onboarding') {
+        app.innerHTML = renderOnboarding();
+        return;
+    }
+
     // Check authentication
     const isAuthenticated = !!(state.settings.scriptUrl && state.settings.secretKey);
     
@@ -1361,6 +1389,239 @@ function renderLogin() {
     `;
 }
 
+function saveOnboardingDraft() {
+    localStorage.setItem(ONBOARDING_DRAFT_KEY, JSON.stringify({
+        step: state.onboardingStep,
+        data: state.onboardingData
+    }));
+}
+
+function updateOnboardingField(field, value) {
+    state.onboardingData[field] = value;
+    saveOnboardingDraft();
+}
+
+function selectOnboardingProfile(type) {
+    state.onboardingData.profileType = type;
+    saveOnboardingDraft();
+    render();
+}
+
+function prevOnboardingStep() {
+    state.onboardingStep = Math.max(0, state.onboardingStep - 1);
+    saveOnboardingDraft();
+    render();
+}
+
+function nextOnboardingStep() {
+    if (state.onboardingStep === 1 && !String(state.onboardingData.name || '').trim()) {
+        alert('כדי להמשיך, צריך שם קטן להיכרות.');
+        return;
+    }
+    if (state.onboardingStep === 2 && !state.onboardingData.profileType) {
+        alert('בחר/י סוג ניהול כדי שנתאים את החוויה.');
+        return;
+    }
+    state.onboardingStep = Math.min(5, state.onboardingStep + 1);
+    saveOnboardingDraft();
+    render();
+}
+
+function finishOnboarding() {
+    const name = String(state.onboardingData.name || '').trim() || 'משתמש';
+    const cycleStartDay = Math.max(1, Math.min(28, Number(state.onboardingData.cycleStartDay) || 1));
+    const checkingBalance = Number(state.onboardingData.checkingBalance) || 0;
+    const fixedIncome = Number(state.onboardingData.fixedIncome) || 0;
+    const fixedExpense = Number(state.onboardingData.fixedExpense) || 0;
+    const today = formatDateLocal(new Date());
+
+    state.settings.userName = name;
+    state.settings.cycleStartDay = cycleStartDay;
+
+    // Initialize first-run data from the onboarding answers.
+    state.transactions = [];
+    state.savingsGoals = [];
+    state.accountBalances = [];
+
+    if (checkingBalance > 0) {
+        state.accountBalances.push({
+            id: `acc-${Date.now()}`,
+            name: 'חשבון עו״ש ראשי',
+            amount: checkingBalance,
+            type: 'checking',
+            lastUpdated: new Date().toISOString()
+        });
+    }
+
+    if (fixedIncome > 0) {
+        state.transactions.push({
+            id: `tx-inc-${Date.now()}`,
+            name: 'הכנסה חודשית קבועה',
+            amount: fixedIncome,
+            type: 'fixed_income',
+            date: today,
+            category: 'משכורת',
+            isRecurring: true,
+            frequency: 'monthly',
+            desc: 'הוגדר בשלב ההיכרות'
+        });
+    }
+
+    if (fixedExpense > 0) {
+        state.transactions.push({
+            id: `tx-exp-${Date.now() + 1}`,
+            name: 'הוצאה חודשית קבועה',
+            amount: fixedExpense,
+            type: 'fixed_expense',
+            date: today,
+            category: 'מגורים',
+            isRecurring: true,
+            frequency: 'monthly',
+            desc: 'הוגדר בשלב ההיכרות'
+        });
+    }
+
+    localStorage.setItem('budget_settings', JSON.stringify(state.settings));
+    localStorage.setItem(ONBOARDING_DONE_KEY, '1');
+    localStorage.removeItem(ONBOARDING_DRAFT_KEY);
+    navigate('/login');
+}
+
+function renderOnboarding() {
+    const step = state.onboardingStep;
+    const progress = ((step + 1) / 6) * 100;
+
+    const stepContent = (() => {
+        if (step === 0) {
+            return `
+                <div class="space-y-6 text-center">
+                    <div class="w-20 h-20 rounded-3xl bg-primary/15 mx-auto flex items-center justify-center text-primary">
+                        <span class="material-symbols-outlined text-5xl">waving_hand</span>
+                    </div>
+                    <div>
+                        <h1 class="text-3xl font-black text-on-surface">ברוכים הבאים ל-BudgetPro</h1>
+                        <p class="text-on-surface-variant mt-2">כמה מסכים קלילים ונגדיר הכל יחד תוך דקה.</p>
+                    </div>
+                    <button onclick="nextOnboardingStep()" class="w-full h-14 bg-primary text-on-primary rounded-2xl font-bold text-lg shadow-lg shadow-primary/20">יאללה מתחילים</button>
+                </div>
+            `;
+        }
+
+        if (step === 1) {
+            return `
+                <div class="space-y-6">
+                    <h2 class="text-2xl font-black">היי, מה שמך?</h2>
+                    <p class="text-on-surface-variant">אנחנו רוצים להכיר אותך כדי להתאים את המערכת אישית.</p>
+                    <input type="text" value="${state.onboardingData.name || ''}" oninput="updateOnboardingField('name', this.value)" placeholder="למשל: דניאל" class="w-full h-14 px-4 rounded-2xl bg-white border-2 border-surface-variant/40 focus:border-primary outline-none transition-all">
+                </div>
+            `;
+        }
+
+        if (step === 2) {
+            return `
+                <div class="space-y-6">
+                    <h2 class="text-2xl font-black">איך ננהל את הכסף?</h2>
+                    <p class="text-on-surface-variant">זה יעזור לנו לכוון את הדשבורד והסיכומים.</p>
+                    <div class="grid grid-cols-1 gap-3">
+                        <button onclick="selectOnboardingProfile('family')" class="p-5 rounded-2xl border-2 text-right transition-all ${state.onboardingData.profileType === 'family' ? 'border-primary bg-primary/10' : 'border-surface-variant/30 bg-white'}">
+                            <p class="font-extrabold">אני כאן כדי לנהל תא משפחתי</p>
+                            <p class="text-xs text-on-surface-variant mt-1">יותר דגש על תכנון משותף ויעדים משפחתיים.</p>
+                        </button>
+                        <button onclick="selectOnboardingProfile('personal')" class="p-5 rounded-2xl border-2 text-right transition-all ${state.onboardingData.profileType === 'personal' ? 'border-primary bg-primary/10' : 'border-surface-variant/30 bg-white'}">
+                            <p class="font-extrabold">אני כאן כדי לנהל את התזרים האישי שלי</p>
+                            <p class="text-xs text-on-surface-variant mt-1">יותר פוקוס על הכנסות, הוצאות ועמידה ביעדים.</p>
+                        </button>
+                    </div>
+                </div>
+            `;
+        }
+
+        if (step === 3) {
+            return `
+                <div class="space-y-6">
+                    <h2 class="text-2xl font-black">איך האפליקציה תעזור לך?</h2>
+                    <div class="space-y-3">
+                        <div class="p-4 rounded-2xl bg-white border border-surface-variant/30">
+                            <p class="font-bold">תזרים חודשי חכם</p>
+                            <p class="text-xs text-on-surface-variant">כמה נכנס, כמה יוצא, וכמה נשאר לבזבוז בכל מחזור.</p>
+                        </div>
+                        <div class="p-4 rounded-2xl bg-white border border-surface-variant/30">
+                            <p class="font-bold">תחזית קדימה</p>
+                            <p class="text-xs text-on-surface-variant">תמונת מצב עתידית עם הכנסות צפויות, הוצאות והפקדות לחיסכון.</p>
+                        </div>
+                        <div class="p-4 rounded-2xl bg-white border border-surface-variant/30">
+                            <p class="font-bold">ניהול יעדי חיסכון</p>
+                            <p class="text-xs text-on-surface-variant">מעקב יעד, הפקדות אוטומטיות והפקדות נוספות בכל רגע.</p>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        if (step === 4) {
+            return `
+                <div class="space-y-5">
+                    <h2 class="text-2xl font-black">שאלון קצר להתחלה</h2>
+                    <p class="text-on-surface-variant text-sm">הנתונים האלו יתנו בסיס ראשוני לתזרים ולתחזית.</p>
+                    <div class="grid grid-cols-2 gap-3">
+                        <div class="space-y-1">
+                            <label class="text-xs font-bold text-on-surface-variant">יום תחילת מחזור</label>
+                            <input type="number" min="1" max="28" value="${state.onboardingData.cycleStartDay || 1}" oninput="updateOnboardingField('cycleStartDay', this.value)" class="w-full h-12 px-3 rounded-xl bg-white border border-surface-variant/40 outline-none focus:border-primary">
+                        </div>
+                        <div class="space-y-1">
+                            <label class="text-xs font-bold text-on-surface-variant">יתרת עו״ש נוכחית</label>
+                            <input type="number" min="0" value="${state.onboardingData.checkingBalance || ''}" oninput="updateOnboardingField('checkingBalance', this.value)" class="w-full h-12 px-3 rounded-xl bg-white border border-surface-variant/40 outline-none focus:border-primary">
+                        </div>
+                        <div class="space-y-1">
+                            <label class="text-xs font-bold text-on-surface-variant">הכנסה חודשית קבועה</label>
+                            <input type="number" min="0" value="${state.onboardingData.fixedIncome || ''}" oninput="updateOnboardingField('fixedIncome', this.value)" class="w-full h-12 px-3 rounded-xl bg-white border border-surface-variant/40 outline-none focus:border-primary">
+                        </div>
+                        <div class="space-y-1">
+                            <label class="text-xs font-bold text-on-surface-variant">הוצאה חודשית קבועה</label>
+                            <input type="number" min="0" value="${state.onboardingData.fixedExpense || ''}" oninput="updateOnboardingField('fixedExpense', this.value)" class="w-full h-12 px-3 rounded-xl bg-white border border-surface-variant/40 outline-none focus:border-primary">
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        return `
+            <div class="space-y-6 text-center">
+                <div class="w-20 h-20 rounded-3xl bg-emerald-100 mx-auto flex items-center justify-center text-emerald-600">
+                    <span class="material-symbols-outlined text-5xl">check_circle</span>
+                </div>
+                <div>
+                    <h2 class="text-3xl font-black">איזה כיף, סיימנו!</h2>
+                    <p class="text-on-surface-variant mt-2">יצרנו בסיס התחלתי. בשלב הבא רק מתחברים לנתונים שלך ומתחילים לעבוד.</p>
+                </div>
+                <button onclick="finishOnboarding()" class="w-full h-14 bg-primary text-on-primary rounded-2xl font-bold text-lg shadow-lg shadow-primary/20">לעמוד ההתחברות</button>
+            </div>
+        `;
+    })();
+
+    return `
+        <div class="min-h-screen bg-gradient-to-b from-background to-primary-container/20 px-4 py-6">
+            <div class="max-w-2xl mx-auto">
+                <div class="h-2 w-full bg-white/70 rounded-full overflow-hidden mb-6 border border-surface-variant/20">
+                    <div class="h-full bg-primary transition-all duration-500" style="width: ${progress}%"></div>
+                </div>
+
+                <div class="bg-white/90 backdrop-blur-sm rounded-[2rem] p-6 md:p-8 border border-surface-variant/30 shadow-xl min-h-[68vh] flex flex-col justify-between">
+                    <div class="transition-all duration-300 ease-out translate-y-0 opacity-100">
+                        ${stepContent}
+                    </div>
+
+                    <div class="pt-6 flex items-center justify-between">
+                        <button onclick="prevOnboardingStep()" class="h-11 px-4 rounded-xl border border-surface-variant/40 font-bold ${step === 0 ? 'opacity-0 pointer-events-none' : 'opacity-100'}">חזרה</button>
+                        <span class="text-xs text-on-surface-variant font-bold">שלב ${step + 1} מתוך 6</span>
+                        <button onclick="nextOnboardingStep()" class="h-11 px-5 rounded-xl bg-primary text-white font-bold ${step === 5 ? 'opacity-0 pointer-events-none' : 'opacity-100'}">המשך</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+}
+
 // --- API Communication ---
 function applyBootstrapData(result) {
     if (!result || !result.ok) return false;
@@ -2281,6 +2542,26 @@ async function init() {
     const saved = localStorage.getItem('budget_settings');
     if (saved) {
         state.settings = JSON.parse(saved);
+        if (!localStorage.getItem(ONBOARDING_DONE_KEY)) {
+            // Preserve the current experience for existing users.
+            localStorage.setItem(ONBOARDING_DONE_KEY, '1');
+        }
+    }
+
+    const onboardingDraft = localStorage.getItem(ONBOARDING_DRAFT_KEY);
+    if (onboardingDraft) {
+        try {
+            const parsed = JSON.parse(onboardingDraft);
+            if (parsed && typeof parsed === 'object') {
+                state.onboardingStep = Number(parsed.step) || 0;
+                state.onboardingData = {
+                    ...state.onboardingData,
+                    ...(parsed.data || {})
+                };
+            }
+        } catch (_) {
+            // Ignore malformed draft values.
+        }
     }
     
     // Initial fetch from GAS if authenticated

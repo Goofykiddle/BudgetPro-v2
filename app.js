@@ -1117,7 +1117,7 @@ function renderSettings() {
                                 <div>
                                     <p class="font-bold">${item.name}</p>
                                     <div class="flex items-center gap-2">
-                                        <span class="px-2 py-0.5 bg-rose-50 text-rose-700 text-[10px] rounded-full font-bold">${(FREQUENCIES[item.frequency] || FREQUENCIES.monthly).label}</span>
+                                        <span class="px-2 py-0.5 bg-rose-50 text-rose-700 text-[10px] rounded-full font-bold">${((FREQUENCIES[item?.frequency]) || { label: 'חודשי' }).label}</span>
                                         ${item.isVariablePrice ? '<span class="px-2 py-0.5 bg-amber-50 text-amber-700 text-[10px] rounded-full font-bold">מחיר משתנה</span>' : ''}
                                     </div>
                                 </div>
@@ -1221,7 +1221,14 @@ async function fetchDataFromGAS() {
         const result = await response.json();
         
         if (result.ok) {
-            state.transactions = result.transactions || [];
+            state.transactions = (result.transactions || []).map((t) => {
+                if (!t || typeof t !== 'object') return t;
+                const isFixedExpense = t.type === 'fixed_expense';
+                return {
+                    ...t,
+                    frequency: isFixedExpense && !FREQUENCIES[t.frequency] ? 'monthly' : t.frequency
+                };
+            });
             state.savingsGoals = result.savingsGoals || [];
             state.accountBalances = result.accountBalances || [];
             if (result.categories) {

@@ -1232,6 +1232,37 @@ function renderLogin() {
 }
 
 // --- API Communication ---
+function applyBootstrapData(result) {
+    if (!result || !result.ok) return false;
+
+    state.transactions = (result.transactions || []).map((t) => {
+        if (!t || typeof t !== 'object') return t;
+        const isFixedExpense = t.type === 'fixed_expense';
+        return {
+            ...t,
+            frequency: isFixedExpense && !FREQUENCIES[t.frequency] ? 'monthly' : t.frequency
+        };
+    });
+    state.savingsGoals = result.savingsGoals || [];
+    state.accountBalances = result.accountBalances || [];
+    if (result.categories) {
+        state.categories = result.categories.map(cat => {
+            if (typeof cat === 'string') return { name: cat, icon: 'category' };
+            return cat;
+        });
+    }
+    if (result.settings) {
+        // Keep local auth fields; server settings may be stale or empty.
+        state.settings = {
+            ...state.settings,
+            ...result.settings,
+            scriptUrl: state.settings.scriptUrl,
+            secretKey: state.settings.secretKey
+        };
+    }
+    return true;
+}
+
 async function fetchDataFromGAS(options = {}) {
     if (!state.settings.scriptUrl || !state.settings.secretKey) return;
     const showLoading = options.showLoading !== false;
@@ -1252,36 +1283,11 @@ async function fetchDataFromGAS(options = {}) {
 
         const result = await response.json();
         
-        if (result.ok) {
-            state.transactions = (result.transactions || []).map((t) => {
-                if (!t || typeof t !== 'object') return t;
-                const isFixedExpense = t.type === 'fixed_expense';
-                return {
-                    ...t,
-                    frequency: isFixedExpense && !FREQUENCIES[t.frequency] ? 'monthly' : t.frequency
-                };
-            });
-            state.savingsGoals = result.savingsGoals || [];
-            state.accountBalances = result.accountBalances || [];
-            if (result.categories) {
-                state.categories = result.categories.map(cat => {
-                    if (typeof cat === 'string') return { name: cat, icon: 'category' };
-                    return cat;
-                });
-            }
-            if (result.settings) {
-                // Keep local auth fields; server settings may be stale or empty.
-                state.settings = {
-                    ...state.settings,
-                    ...result.settings,
-                    scriptUrl: state.settings.scriptUrl,
-                    secretKey: state.settings.secretKey
-                };
-            }
+        if (applyBootstrapData(result)) {
             render();
         } else {
-            console.error('Failed to fetch data:', result.message);
-            if (result.message === 'Invalid secret key') {
+            console.error('Failed to fetch data:', result && result.message);
+            if (result && result.message === 'Invalid secret key') {
                 console.warn('Secret key rejected by backend. Keeping current session values for retry.');
             }
         }
@@ -1311,7 +1317,14 @@ async function saveDataToGAS(action, data) {
             throw new Error(`Save failed with HTTP ${response.status}`);
         }
 
-        await fetchDataFromGAS({ showLoading: false });
+        const result = await response.json();
+        const bootstrap = result && result.state && result.state.ok ? result.state : result;
+        if (applyBootstrapData(bootstrap)) {
+            render();
+        } else {
+            // Fallback for unexpected backend payload shape.
+            await fetchDataFromGAS({ showLoading: false });
+        }
     } catch (error) {
         console.error('Error saving data:', error);
     } finally {

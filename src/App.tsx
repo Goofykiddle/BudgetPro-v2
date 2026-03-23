@@ -1,6 +1,5 @@
 import React from 'react';
-import { BrowserRouter as Router, Routes, Route, useLocation, Navigate } from 'react-router-dom';
-import { TopAppBar, BottomNavBar } from './components/Navigation';
+import { HashRouter as Router, Routes, Route, useLocation, Navigate } from 'react-router-dom';import { TopAppBar, BottomNavBar } from './components/Navigation';
 import { Home } from './pages/Home';
 import { Transactions } from './pages/Transactions';
 import { Savings } from './pages/Savings';

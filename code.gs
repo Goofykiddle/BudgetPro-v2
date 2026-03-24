@@ -4,7 +4,8 @@ const APP = {
     TRANSACTIONS: 'Transactions',
     SAVINGS_GOALS: 'SavingsGoals',
     ACCOUNT_BALANCES: 'AccountBalances',
-    CATEGORIES: 'Categories'
+    CATEGORIES: 'Categories',
+    INVITE_TOKENS: 'InviteTokens'
   },
   HEADERS: {
     SETTINGS: ['key', 'value'],
@@ -38,7 +39,8 @@ const APP = {
       'monthlyAmount'
     ],
     ACCOUNT_BALANCES: ['id', 'name', 'amount', 'type', 'lastUpdated'],
-    CATEGORIES: ['name']
+    CATEGORIES: ['name'],
+    INVITE_TOKENS: ['token', 'scriptUrl', 'secretKey', 'partnerPhone', 'createdAt', 'expiresAt', 'usedAt', 'isUsed']
   },
   DEFAULT_SETTINGS: {
     userName: '',
@@ -103,7 +105,9 @@ function handleApiRequest_(e) {
     }
 
     const secret = String(params.secret || (body && body.secret) || '').trim();
-    validateSecret_(secret);
+    if (action !== 'resolveInviteToken') {
+      validateSecret_(secret);
+    }
 
     let result;
     switch (action) {
@@ -160,6 +164,14 @@ function handleApiRequest_(e) {
 
       case 'deleteCategory':
         result = deleteCategory(payload.name || payload.category || payload);
+        break;
+
+      case 'createInviteToken':
+        result = createInviteToken(payload, secret);
+        break;
+
+      case 'resolveInviteToken':
+        result = resolveInviteToken(payload.token || params.token || '');
         break;
 
       case 'resetDemoData':
@@ -361,6 +373,86 @@ function clearAllData() {
   writeCategories_(APP.DEFAULT_CATEGORIES.slice());
 
   return getBootstrapData();
+}
+
+function createInviteToken(payload, secret) {
+  ensureAppSheets_();
+  payload = payload || {};
+
+  const appBaseUrl = String(payload.appBaseUrl || '').trim();
+  const partnerPhone = String(payload.partnerPhone || '').trim();
+  const scriptUrl = String(payload.scriptUrl || '').trim() || String(readSettings_().scriptUrl || '').trim();
+  const resolvedSecret = String(secret || '').trim();
+
+  if (!appBaseUrl) throw new Error('appBaseUrl is required');
+  if (!scriptUrl) throw new Error('scriptUrl is required');
+  if (!resolvedSecret) throw new Error('secret is required');
+
+  const token = Utilities.getUuid().replace(/-/g, '') + Utilities.getUuid().replace(/-/g, '');
+  const createdAt = new Date().toISOString();
+  const expiresAt = new Date(Date.now() + 1000 * 60 * 60 * 24 * 7).toISOString(); // 7 days
+
+  const rows = readObjects_(APP.SHEETS.INVITE_TOKENS, APP.HEADERS.INVITE_TOKENS);
+  rows.push({
+    token: token,
+    scriptUrl: scriptUrl,
+    secretKey: resolvedSecret,
+    partnerPhone: partnerPhone,
+    createdAt: createdAt,
+    expiresAt: expiresAt,
+    usedAt: '',
+    isUsed: false
+  });
+  writeTableFromObjects_(APP.SHEETS.INVITE_TOKENS, APP.HEADERS.INVITE_TOKENS, rows);
+
+  const loginLink =
+    appBaseUrl.replace(/\/+$/, '') +
+    '/#/login?backend=' + encodeURIComponent(scriptUrl) +
+    '&inviteToken=' + encodeURIComponent(token);
+
+  return {
+    ok: true,
+    token: token,
+    expiresAt: expiresAt,
+    loginLink: loginLink
+  };
+}
+
+function resolveInviteToken(tokenValue) {
+  ensureAppSheets_();
+  const token = String(tokenValue || '').trim();
+  if (!token) throw new Error('Token is required');
+
+  const rows = readObjects_(APP.SHEETS.INVITE_TOKENS, APP.HEADERS.INVITE_TOKENS);
+  let foundIndex = -1;
+  for (let i = 0; i < rows.length; i++) {
+    if (String(rows[i].token || '').trim() === token) {
+      foundIndex = i;
+      break;
+    }
+  }
+
+  if (foundIndex === -1) throw new Error('Invite token not found');
+  const row = rows[foundIndex];
+
+  const isUsed = toBool_(row.isUsed);
+  if (isUsed) throw new Error('Invite token already used');
+
+  const expiresAt = String(row.expiresAt || '').trim();
+  if (expiresAt) {
+    const exp = toDate_(expiresAt);
+    if (exp && exp.getTime() < Date.now()) throw new Error('Invite token expired');
+  }
+
+  rows[foundIndex].isUsed = true;
+  rows[foundIndex].usedAt = new Date().toISOString();
+  writeTableFromObjects_(APP.SHEETS.INVITE_TOKENS, APP.HEADERS.INVITE_TOKENS, rows);
+
+  return {
+    ok: true,
+    scriptUrl: String(row.scriptUrl || '').trim(),
+    secretKey: String(row.secretKey || '').trim()
+  };
 }
 
 function readAppState_() {

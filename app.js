@@ -57,7 +57,8 @@ const state = {
         autoRecalculate: true,
         profileImage: 'https://lh3.googleusercontent.com/aida-public/AB6AXuA8tz1rrtsBZ2k9ahQ2gh5R7J9VY1PCZwgQw-WPcE9dbFnPneV3zSgVGp9svoETdhHPP44ajJ2uTs1aQaH3RWmA6TK-ByEWnrlbmi6am1TaFnnwakExMp95akuzKjlavEQkTWWesTNyR8OwEK3GjJ3U9b3IofMqtGYkFtviWx6G34ZOeG5np-vl1kNcCr4QykXSoIakaC1nIJeAsy_jxpTUywU6iQMDzJcGKVy8_SopP-gAQHotii8iMcbjCRyIUbnh9UMBxtYtwwo',
         scriptUrl: '',
-        secretKey: ''
+        secretKey: '',
+        inviteMessageStyle: 'short'
     },
     categories: [
         { name: 'מזון', icon: 'restaurant' },
@@ -82,9 +83,12 @@ const state = {
     onboardingData: {
         name: '',
         profileType: '',
+        invitePartner: '',
+        partnerPhone: '',
         cycleStartDay: 1,
         checkingBalance: '',
         fixedIncome: '',
+        spouseSalary: '',
         fixedExpense: ''
     },
     error: null
@@ -141,6 +145,30 @@ function formatDateLocal(date) {
     const month = String(d.getMonth() + 1).padStart(2, '0');
     const day = String(d.getDate()).padStart(2, '0');
     return `${year}-${month}-${day}`;
+}
+
+function escapeHtmlAttr(value) {
+    return String(value || '')
+        .replace(/&/g, '&amp;')
+        .replace(/"/g, '&quot;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;');
+}
+
+function getLoginPrefillFromHash() {
+    const rawHash = window.location.hash || '';
+    const clean = rawHash.startsWith('#') ? rawHash.slice(1) : rawHash;
+    const parts = clean.split('?');
+    const path = parts[0] || '/';
+    if (path !== '/login') return { scriptUrl: '', secretKey: '' };
+
+    const params = new URLSearchParams(parts[1] || '');
+    return {
+        scriptUrl: params.get('scriptUrl') || '',
+        secretKey: params.get('secretKey') || '',
+        backend: params.get('backend') || '',
+        inviteToken: params.get('inviteToken') || ''
+    };
 }
 
 function parseDateLocal(dateStr) {
@@ -287,6 +315,9 @@ function render() {
 
     if (state.currentPath === '/login') {
         app.innerHTML = renderLogin();
+        setTimeout(() => {
+            resolveInviteTokenIfPresent();
+        }, 0);
         return;
     }
 
@@ -1224,6 +1255,25 @@ function renderSettings() {
                 </div>
             </section>
 
+            ${state.settings.householdMode === 'family' ? `
+                <section class="space-y-4">
+                    <div class="flex items-center gap-2 mb-2">
+                        <span class="material-symbols-outlined text-primary">group_add</span>
+                        <h3 class="text-lg font-bold">הזמנת בן/בת זוג לחשבון</h3>
+                    </div>
+                    <div class="bg-surface-variant/10 rounded-3xl p-6 space-y-4 border border-surface-variant/30">
+                        <p class="text-sm text-on-surface-variant">אפשר לשלוח הזמנה ישירות בוואטסאפ כדי להתחבר לאותה מערכת נתונים.</p>
+                        <div class="space-y-2">
+                            <label class="text-xs font-bold text-on-surface-variant uppercase tracking-wider px-1">מספר טלפון</label>
+                            <input type="tel" id="partner-phone-input" dir="ltr" value="${state.settings.partnerPhone || ''}" placeholder="05XXXXXXXX" class="w-full h-14 px-4 rounded-2xl bg-white border-2 border-transparent focus:border-primary outline-none transition-all">
+                        </div>
+                        <button onclick="sendPartnerInvite()" class="w-full h-12 bg-primary text-white rounded-xl font-bold">
+                            שליחת הזמנה בוואטסאפ
+                        </button>
+                    </div>
+                </section>
+            ` : ''}
+
             <!-- Account Balances -->
             <section class="space-y-4">
                 <div class="flex items-center justify-between">
@@ -1359,7 +1409,101 @@ function handleProfileImageUpload(event) {
     }
 }
 
+function normalizePhoneForWhatsApp(rawPhone) {
+    const digits = String(rawPhone || '').replace(/[^\d]/g, '');
+    if (!digits) return '';
+    if (digits.startsWith('972')) return digits;
+    if (digits.startsWith('0')) return `972${digits.slice(1)}`;
+    return digits;
+}
+
+function isValidIsraeliPhone(rawPhone) {
+    const digits = String(rawPhone || '').replace(/[^\d]/g, '');
+    if (!digits) return false;
+    if (digits.startsWith('05') && digits.length === 10) return true;
+    if (digits.startsWith('9725') && digits.length === 12) return true;
+    return false;
+}
+
+function sendPartnerInvite() {
+    const input = document.getElementById('partner-phone-input');
+    const rawPhone = input ? input.value : (state.settings.partnerPhone || '');
+    const normalizedPhone = normalizePhoneForWhatsApp(rawPhone);
+
+    state.settings.partnerPhone = rawPhone || '';
+    localStorage.setItem('budget_settings', JSON.stringify(state.settings));
+    saveDataToGAS('updateSettings', state.settings);
+
+    if (!isValidIsraeliPhone(rawPhone) || !normalizedPhone) {
+        alert('נא להזין מספר ישראלי תקין (למשל 05XXXXXXXX).');
+        return;
+    }
+    if (!state.settings.scriptUrl || !state.settings.secretKey) {
+        alert('כדי לשלוח הזמנה צריך קודם להגדיר Script URL ו-Secret Key.');
+        return;
+    }
+
+    const appBaseUrl = `${window.location.origin}${window.location.pathname}`;
+    const form = new URLSearchParams();
+    form.set('secret', state.settings.secretKey);
+    form.set('action', 'createInviteToken');
+    form.set('payload', JSON.stringify({
+        appBaseUrl,
+        partnerPhone: rawPhone,
+        scriptUrl: state.settings.scriptUrl
+    }));
+
+    fetch(state.settings.scriptUrl, { method: 'POST', body: form })
+        .then(res => res.json())
+        .then(result => {
+            if (!result || !result.ok || !result.loginLink) {
+                throw new Error((result && result.message) || 'Failed to create invite token');
+            }
+
+            const message = [
+                `היי! הוזמנת להצטרף לחשבון BudgetPro המשפחתי שלנו.`,
+                ``,
+                `כניסה מהירה (טוקן חד-פעמי):`,
+                `${result.loginLink}`,
+                ``,
+                `פותחים את הקישור ולוחצים התחברות.`
+            ].join('\n');
+
+            const waUrl = `https://wa.me/${normalizedPhone}?text=${encodeURIComponent(message)}`;
+            window.open(waUrl, '_blank');
+        })
+        .catch((err) => {
+            console.error('Invite token creation failed:', err);
+            alert('לא הצלחנו ליצור הזמנה מאובטחת כרגע. נסה/י שוב בעוד רגע.');
+        });
+}
+
+async function resolveInviteTokenIfPresent() {
+    const prefill = getLoginPrefillFromHash();
+    if (!prefill.inviteToken || !prefill.backend) return;
+
+    try {
+        const url = `${prefill.backend}?action=resolveInviteToken&token=${encodeURIComponent(prefill.inviteToken)}`;
+        const res = await fetch(url);
+        const result = await res.json();
+        if (!result || !result.ok) {
+            throw new Error((result && result.message) || 'Invalid invite token');
+        }
+
+        const scriptInput = document.getElementById('scriptUrl');
+        const secretInput = document.getElementById('secretKey');
+        if (scriptInput && secretInput) {
+            scriptInput.value = result.scriptUrl || prefill.backend;
+            secretInput.value = result.secretKey || '';
+        }
+    } catch (err) {
+        console.error('Failed to resolve invite token:', err);
+        alert('לינק ההזמנה לא תקין או שפג תוקפו.');
+    }
+}
+
 function renderLogin() {
+    const prefill = getLoginPrefillFromHash();
     return `
         <div class="min-h-screen flex flex-col items-center justify-center p-6 bg-background">
             <div class="w-full max-w-sm space-y-8">
@@ -1374,11 +1518,11 @@ function renderLogin() {
                 <div class="space-y-4">
                     <div class="space-y-2">
                         <label class="text-sm font-medium px-1">כתובת Script</label>
-                        <input type="text" id="scriptUrl" placeholder="https://script.google.com/..." class="w-full h-14 px-4 rounded-2xl bg-surface-variant/30 border-2 border-transparent focus:border-primary focus:bg-white outline-none transition-all">
+                        <input type="text" id="scriptUrl" value="${escapeHtmlAttr(prefill.scriptUrl || '')}" placeholder="https://script.google.com/..." class="w-full h-14 px-4 rounded-2xl bg-surface-variant/30 border-2 border-transparent focus:border-primary focus:bg-white outline-none transition-all">
                     </div>
                     <div class="space-y-2">
                         <label class="text-sm font-medium px-1">מפתח סודי</label>
-                        <input type="password" id="secretKey" placeholder="••••••••" class="w-full h-14 px-4 rounded-2xl bg-surface-variant/30 border-2 border-transparent focus:border-primary focus:bg-white outline-none transition-all">
+                        <input type="password" id="secretKey" value="${escapeHtmlAttr(prefill.secretKey || '')}" placeholder="••••••••" class="w-full h-14 px-4 rounded-2xl bg-surface-variant/30 border-2 border-transparent focus:border-primary focus:bg-white outline-none transition-all">
                     </div>
                     <button onclick="handleLogin()" class="w-full h-14 bg-primary text-on-primary rounded-2xl font-bold text-lg shadow-lg shadow-primary/20 hover:scale-[1.02] active:scale-[0.98] transition-all mt-4">
                         התחברות
@@ -1432,11 +1576,14 @@ function finishOnboarding() {
     const cycleStartDay = Math.max(1, Math.min(28, Number(state.onboardingData.cycleStartDay) || 1));
     const checkingBalance = Number(state.onboardingData.checkingBalance) || 0;
     const fixedIncome = Number(state.onboardingData.fixedIncome) || 0;
+    const spouseSalary = Number(state.onboardingData.spouseSalary) || 0;
     const fixedExpense = Number(state.onboardingData.fixedExpense) || 0;
     const today = formatDateLocal(new Date());
 
     state.settings.userName = name;
     state.settings.cycleStartDay = cycleStartDay;
+    state.settings.householdMode = state.onboardingData.profileType || 'personal';
+    state.settings.partnerPhone = state.onboardingData.partnerPhone || '';
 
     // Initialize first-run data from the onboarding answers.
     state.transactions = [];
@@ -1458,6 +1605,20 @@ function finishOnboarding() {
             id: `tx-inc-${Date.now()}`,
             name: 'הכנסה חודשית קבועה',
             amount: fixedIncome,
+            type: 'fixed_income',
+            date: today,
+            category: 'משכורת',
+            isRecurring: true,
+            frequency: 'monthly',
+            desc: 'הוגדר בשלב ההיכרות'
+        });
+    }
+
+    if (spouseSalary > 0) {
+        state.transactions.push({
+            id: `tx-spouse-inc-${Date.now() + 2}`,
+            name: 'משכורת בן/בת זוג',
+            amount: spouseSalary,
             type: 'fixed_income',
             date: today,
             category: 'משכורת',
@@ -1532,6 +1693,19 @@ function renderOnboarding() {
                             <p class="text-xs text-on-surface-variant mt-1">יותר פוקוס על הכנסות, הוצאות ועמידה ביעדים.</p>
                         </button>
                     </div>
+
+                    ${state.onboardingData.profileType === 'family' ? `
+                        <div class="space-y-3 pt-2">
+                            <p class="font-bold text-sm">תרצה/י להוסיף בן/בת זוג ולהזמין אותו/ה בהמשך?</p>
+                            <div class="grid grid-cols-2 gap-3">
+                                <button onclick="updateOnboardingField('invitePartner','yes'); render();" class="h-12 rounded-xl border-2 font-bold ${state.onboardingData.invitePartner === 'yes' ? 'border-primary bg-primary/10' : 'border-surface-variant/30 bg-white'}">כן</button>
+                                <button onclick="updateOnboardingField('invitePartner','no'); render();" class="h-12 rounded-xl border-2 font-bold ${state.onboardingData.invitePartner === 'no' ? 'border-primary bg-primary/10' : 'border-surface-variant/30 bg-white'}">לא</button>
+                            </div>
+                            ${state.onboardingData.invitePartner === 'yes' ? `
+                                <input type="tel" dir="ltr" value="${state.onboardingData.partnerPhone || ''}" oninput="updateOnboardingField('partnerPhone', this.value)" placeholder="טלפון בן/בת זוג (למשל 05XXXXXXXX)" class="w-full h-12 px-3 rounded-xl bg-white border border-surface-variant/40 outline-none focus:border-primary">
+                            ` : ''}
+                        </div>
+                    ` : ''}
                 </div>
             `;
         }
@@ -1564,9 +1738,13 @@ function renderOnboarding() {
                     <h2 class="text-2xl font-black">שאלון קצר להתחלה</h2>
                     <p class="text-on-surface-variant text-sm">הנתונים האלו יתנו בסיס ראשוני לתזרים ולתחזית.</p>
                     <div class="grid grid-cols-2 gap-3">
-                        <div class="space-y-1">
-                            <label class="text-xs font-bold text-on-surface-variant">יום תחילת מחזור</label>
-                            <input type="number" min="1" max="28" value="${state.onboardingData.cycleStartDay || 1}" oninput="updateOnboardingField('cycleStartDay', this.value)" class="w-full h-12 px-3 rounded-xl bg-white border border-surface-variant/40 outline-none focus:border-primary">
+                        <div class="space-y-1 col-span-2">
+                            <label class="text-xs font-bold text-on-surface-variant">יום תחילת מחזור (כמו בהגדרות)</label>
+                            <div class="grid grid-cols-4 gap-2">
+                                ${[1,2,10,15].map(day => `
+                                    <button type="button" onclick="updateOnboardingField('cycleStartDay', ${day}); render();" class="h-11 rounded-xl font-bold border transition-all ${Number(state.onboardingData.cycleStartDay || 1) === day ? 'bg-primary text-white border-primary' : 'bg-white border-surface-variant/40'}">${day}</button>
+                                `).join('')}
+                            </div>
                         </div>
                         <div class="space-y-1">
                             <label class="text-xs font-bold text-on-surface-variant">יתרת עו״ש נוכחית</label>
@@ -1576,6 +1754,12 @@ function renderOnboarding() {
                             <label class="text-xs font-bold text-on-surface-variant">הכנסה חודשית קבועה</label>
                             <input type="number" min="0" value="${state.onboardingData.fixedIncome || ''}" oninput="updateOnboardingField('fixedIncome', this.value)" class="w-full h-12 px-3 rounded-xl bg-white border border-surface-variant/40 outline-none focus:border-primary">
                         </div>
+                        ${state.onboardingData.profileType === 'family' ? `
+                            <div class="space-y-1 col-span-2">
+                                <label class="text-xs font-bold text-on-surface-variant">שכר בן/בת זוג (אם יש)</label>
+                                <input type="number" min="0" value="${state.onboardingData.spouseSalary || ''}" oninput="updateOnboardingField('spouseSalary', this.value)" class="w-full h-12 px-3 rounded-xl bg-white border border-surface-variant/40 outline-none focus:border-primary">
+                            </div>
+                        ` : ''}
                         <div class="space-y-1">
                             <label class="text-xs font-bold text-on-surface-variant">הוצאה חודשית קבועה</label>
                             <input type="number" min="0" value="${state.onboardingData.fixedExpense || ''}" oninput="updateOnboardingField('fixedExpense', this.value)" class="w-full h-12 px-3 rounded-xl bg-white border border-surface-variant/40 outline-none focus:border-primary">

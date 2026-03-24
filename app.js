@@ -679,7 +679,7 @@ function renderTransactions() {
     const totalAssets = state.accountBalances.reduce((sum, acc) => sum + acc.amount, 0);
 
     return `
-        <div class="space-y-8 pb-10">
+        <div class="space-y-6 pb-10">
             <!-- Remaining to Spend -->
             <div class="bg-primary rounded-3xl p-6 text-on-primary shadow-lg shadow-primary/20 relative overflow-hidden mt-4">
                 <div class="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full -mr-16 -mt-16 blur-2xl"></div>
@@ -702,7 +702,7 @@ function renderTransactions() {
             </div>
 
             <!-- Quick Actions -->
-            <div class="grid grid-cols-4 gap-3">
+            <div class="grid grid-cols-4 gap-2">
                 <button onclick="renderTransactionModal({ type: 'variable_income' })" class="flex flex-col items-center gap-2 p-3 rounded-2xl bg-surface-variant/30 hover:bg-surface-variant/50 transition-colors">
                     <div class="w-12 h-12 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center">
                         <span class="material-symbols-outlined">add</span>
@@ -725,13 +725,13 @@ function renderTransactions() {
                     <div class="w-12 h-12 rounded-full bg-purple-100 text-purple-700 flex items-center justify-center">
                         <span class="material-symbols-outlined">account_balance</span>
                     </div>
-                    <span class="text-[10px] font-medium">עו״ש</span>
+                    <span class="text-[10px] font-medium">חשבון</span>
                 </button>
             </div>
 
             <!-- Actions Title -->
             <div class="px-2">
-                <h3 class="text-2xl font-bold mb-1">פעולות במחזור החודשי</h3>
+                <h3 class="text-xl font-bold mb-1">פעולות במחזור החודשי</h3>
                 <p class="text-on-surface-variant text-sm">ניהול ומעקב אחר כל התנועות הכספיות שלך.</p>
             </div>
 

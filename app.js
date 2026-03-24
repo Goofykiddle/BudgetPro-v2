@@ -97,6 +97,18 @@ const state = {
 
 const ONBOARDING_DONE_KEY = 'budget_onboarding_completed_v1';
 const ONBOARDING_DRAFT_KEY = 'budget_onboarding_draft_v1';
+const PERF_LOGS_ENABLED = true;
+
+function perfNow() {
+    if (typeof performance !== 'undefined' && performance.now) return performance.now();
+    return Date.now();
+}
+
+function perfLog(label, startedAt, extra = '') {
+    if (!PERF_LOGS_ENABLED) return;
+    const took = (perfNow() - startedAt).toFixed(1);
+    console.log(`[PERF] ${label}: ${took}ms${extra ? ` | ${extra}` : ''}`);
+}
 
 // --- Constants ---
 const PASTEL_COLORS = [
@@ -283,6 +295,7 @@ window.addEventListener('hashchange', () => {
 
 // --- Rendering Engine ---
 function render() {
+    const renderStart = perfNow();
     const app = document.getElementById('app');
     const onboardingCompleted = localStorage.getItem(ONBOARDING_DONE_KEY) === '1';
     
@@ -338,6 +351,7 @@ function render() {
     // Re-attach event listeners and initialize charts if needed
     attachEventListeners();
     initCharts();
+    perfLog('render()', renderStart, `path=${state.currentPath}`);
 }
 
 function renderLoadingOverlay() {
@@ -1865,6 +1879,7 @@ function renderOnboarding() {
 
 // --- API Communication ---
 function applyBootstrapData(result) {
+    const applyStart = perfNow();
     if (!result || !result.ok) return false;
 
     state.transactions = (result.transactions || []).map((t) => {
@@ -1892,16 +1907,20 @@ function applyBootstrapData(result) {
             secretKey: state.settings.secretKey
         };
     }
+    perfLog('applyBootstrapData()', applyStart, `tx=${state.transactions.length}, goals=${state.savingsGoals.length}, acc=${state.accountBalances.length}`);
     return true;
 }
 
 async function fetchDataFromGAS(options = {}) {
+    const totalStart = perfNow();
     if (!state.settings.scriptUrl || !state.settings.secretKey) return;
     const showLoading = options.showLoading !== false;
     if (showLoading) startLoading(options.loadingMessage || 'טוען נתונים מהקובץ...');
 
     try {
+        const networkStart = perfNow();
         const response = await fetch(`${state.settings.scriptUrl}?secret=${encodeURIComponent(state.settings.secretKey)}&action=getBootstrapData`);
+        perfLog('fetchDataFromGAS network', networkStart, `status=${response.status}`);
         
         const contentType = response.headers.get("content-type");
         if (!contentType || !contentType.includes("application/json")) {
@@ -1913,7 +1932,9 @@ async function fetchDataFromGAS(options = {}) {
             return;
         }
 
+        const parseStart = perfNow();
         const result = await response.json();
+        perfLog('fetchDataFromGAS parseJSON', parseStart);
         
         if (applyBootstrapData(result)) {
             render();
@@ -1926,30 +1947,38 @@ async function fetchDataFromGAS(options = {}) {
     } catch (error) {
         console.error('Error fetching data:', error);
     } finally {
+        perfLog('fetchDataFromGAS total', totalStart, `showLoading=${showLoading}`);
         if (showLoading) stopLoading();
     }
 }
 
 async function saveDataToGAS(action, data) {
+    const totalStart = perfNow();
     if (!state.settings.scriptUrl || !state.settings.secretKey) return;
     startLoading('שומר ומסנכרן נתונים...');
 
     try {
+        const prepStart = perfNow();
         const form = new URLSearchParams();
         form.set('secret', state.settings.secretKey);
         form.set('action', action);
         form.set('payload', JSON.stringify(data || {}));
+        perfLog('saveDataToGAS preparePayload', prepStart, `action=${action}`);
 
+        const networkStart = perfNow();
         const response = await fetch(state.settings.scriptUrl, {
             method: 'POST',
             body: form
         });
+        perfLog('saveDataToGAS network', networkStart, `action=${action}, status=${response.status}`);
 
         if (!response.ok) {
             throw new Error(`Save failed with HTTP ${response.status}`);
         }
 
+        const parseStart = perfNow();
         const result = await response.json();
+        perfLog('saveDataToGAS parseJSON', parseStart, `action=${action}`);
         const bootstrap = result && result.state && result.state.ok ? result.state : result;
         if (applyBootstrapData(bootstrap)) {
             render();
@@ -1960,6 +1989,7 @@ async function saveDataToGAS(action, data) {
     } catch (error) {
         console.error('Error saving data:', error);
     } finally {
+        perfLog('saveDataToGAS total', totalStart, `action=${action}`);
         stopLoading();
     }
 }

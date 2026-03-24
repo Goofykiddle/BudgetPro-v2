@@ -79,6 +79,7 @@ const state = {
     isLoading: false,
     loadingCount: 0,
     loadingMessage: 'טוען נתונים...',
+    partnerInviteExpanded: false,
     onboardingStep: 0,
     onboardingData: {
         name: '',
@@ -672,15 +673,60 @@ function renderTransactions() {
     // "Remaining to spend" must always reflect the full current cycle, not the active list filter.
     const allCycleTransactions = getFilteredTransactions('all');
     const income = allCycleTransactions.filter(t => t.type.includes('income')).reduce((sum, t) => sum + t.amount, 0);
-    const expenses = allCycleTransactions.filter(t => t.type.includes('expense') || t.type === 'savings_deposit').reduce((sum, t) => sum + t.amount, 0);
-    const remaining = income - expenses;
+    const expenses = allCycleTransactions.filter(t => t.type.includes('expense')).reduce((sum, t) => sum + t.amount, 0);
+    const savings = allCycleTransactions.filter(t => t.type === 'savings_deposit').reduce((sum, t) => sum + t.amount, 0);
+    const remaining = income - expenses - savings;
+    const totalAssets = state.accountBalances.reduce((sum, acc) => sum + acc.amount, 0);
 
     return `
         <div class="space-y-8 pb-10">
             <!-- Remaining to Spend -->
-            <div class="bg-surface-variant/20 p-8 rounded-[40px] text-center border border-surface-variant/30">
-                <p class="text-sm font-bold text-on-surface-variant uppercase tracking-widest mb-2">נותר לבזבז החודש</p>
-                <h2 class="text-5xl font-black text-primary tracking-tighter">${formatCurrency(remaining)}</h2>
+            <div class="bg-primary rounded-3xl p-6 text-on-primary shadow-lg shadow-primary/20 relative overflow-hidden mt-4">
+                <div class="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full -mr-16 -mt-16 blur-2xl"></div>
+                <div class="relative z-10">
+                    <p class="text-sm opacity-80 mb-1">יתרה שנותרה לבזבוז החודש</p>
+                    <h2 class="text-3xl font-bold mb-1">${formatCurrency(remaining)}</h2>
+                    <p class="text-[10px] opacity-60 mb-6">סה״כ נכסים: ${formatCurrency(totalAssets)}</p>
+                    
+                    <div class="grid grid-cols-2 gap-4">
+                        <div class="bg-white/10 rounded-2xl p-3 backdrop-blur-sm">
+                            <p class="text-[10px] opacity-80 uppercase tracking-wider mb-1">הכנסות החודש</p>
+                            <p class="text-lg font-bold">${formatCurrency(income)}</p>
+                        </div>
+                        <div class="bg-white/10 rounded-2xl p-3 backdrop-blur-sm">
+                            <p class="text-[10px] opacity-80 uppercase tracking-wider mb-1">הוצאות והפרשות</p>
+                            <p class="text-lg font-bold">${formatCurrency(expenses + savings)}</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Quick Actions -->
+            <div class="grid grid-cols-4 gap-3">
+                <button onclick="renderTransactionModal({ type: 'variable_income' })" class="flex flex-col items-center gap-2 p-3 rounded-2xl bg-surface-variant/30 hover:bg-surface-variant/50 transition-colors">
+                    <div class="w-12 h-12 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center">
+                        <span class="material-symbols-outlined">add</span>
+                    </div>
+                    <span class="text-[10px] font-medium">הכנסה</span>
+                </button>
+                <button onclick="renderTransactionModal({ type: 'variable_expense' })" class="flex flex-col items-center gap-2 p-3 rounded-2xl bg-surface-variant/30 hover:bg-surface-variant/50 transition-colors">
+                    <div class="w-12 h-12 rounded-full bg-rose-100 text-rose-700 flex items-center justify-center">
+                        <span class="material-symbols-outlined">remove</span>
+                    </div>
+                    <span class="text-[10px] font-medium">הוצאה</span>
+                </button>
+                <button onclick="renderSavingsModal()" class="flex flex-col items-center gap-2 p-3 rounded-2xl bg-surface-variant/30 hover:bg-surface-variant/50 transition-colors">
+                    <div class="w-12 h-12 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center">
+                        <span class="material-symbols-outlined">savings</span>
+                    </div>
+                    <span class="text-[10px] font-medium">חיסכון</span>
+                </button>
+                <button onclick="renderAccountModal()" class="flex flex-col items-center gap-2 p-3 rounded-2xl bg-surface-variant/30 hover:bg-surface-variant/50 transition-colors">
+                    <div class="w-12 h-12 rounded-full bg-purple-100 text-purple-700 flex items-center justify-center">
+                        <span class="material-symbols-outlined">account_balance</span>
+                    </div>
+                    <span class="text-[10px] font-medium">עו״ש</span>
+                </button>
             </div>
 
             <!-- Actions Title -->
@@ -1255,25 +1301,6 @@ function renderSettings() {
                 </div>
             </section>
 
-            ${state.settings.householdMode === 'family' ? `
-                <section class="space-y-4">
-                    <div class="flex items-center gap-2 mb-2">
-                        <span class="material-symbols-outlined text-primary">group_add</span>
-                        <h3 class="text-lg font-bold">הזמנת בן/בת זוג לחשבון</h3>
-                    </div>
-                    <div class="bg-surface-variant/10 rounded-3xl p-6 space-y-4 border border-surface-variant/30">
-                        <p class="text-sm text-on-surface-variant">אפשר לשלוח הזמנה ישירות בוואטסאפ כדי להתחבר לאותה מערכת נתונים.</p>
-                        <div class="space-y-2">
-                            <label class="text-xs font-bold text-on-surface-variant uppercase tracking-wider px-1">מספר טלפון</label>
-                            <input type="tel" id="partner-phone-input" dir="ltr" value="${state.settings.partnerPhone || ''}" placeholder="05XXXXXXXX" class="w-full h-14 px-4 rounded-2xl bg-white border-2 border-transparent focus:border-primary outline-none transition-all">
-                        </div>
-                        <button onclick="sendPartnerInvite()" class="w-full h-12 bg-primary text-white rounded-xl font-bold">
-                            שליחת הזמנה בוואטסאפ
-                        </button>
-                    </div>
-                </section>
-            ` : ''}
-
             <!-- Account Balances -->
             <section class="space-y-4">
                 <div class="flex items-center justify-between">
@@ -1367,6 +1394,31 @@ function renderSettings() {
                 </div>
             </section>
 
+            ${state.settings.householdMode === 'family' ? `
+                <section class="space-y-3">
+                    <button onclick="togglePartnerInvitePanel()" class="w-full bg-surface-variant/10 border border-surface-variant/30 rounded-2xl px-4 py-3 flex items-center justify-between">
+                        <div class="flex items-center gap-2">
+                            <span class="material-symbols-outlined text-primary">group_add</span>
+                            <span class="font-bold">הזמנת בן/בת זוג לחשבון</span>
+                        </div>
+                        <span class="material-symbols-outlined text-on-surface-variant">${state.partnerInviteExpanded ? 'expand_less' : 'expand_more'}</span>
+                    </button>
+
+                    ${state.partnerInviteExpanded ? `
+                        <div class="bg-surface-variant/10 rounded-3xl p-6 space-y-4 border border-surface-variant/30">
+                            <p class="text-sm text-on-surface-variant">אפשר לשלוח הזמנה ישירות בוואטסאפ כדי להתחבר לאותה מערכת נתונים.</p>
+                            <div class="space-y-2">
+                                <label class="text-xs font-bold text-on-surface-variant uppercase tracking-wider px-1">מספר טלפון</label>
+                                <input type="tel" id="partner-phone-input" dir="ltr" value="${state.settings.partnerPhone || ''}" placeholder="05XXXXXXXX" class="w-full h-14 px-4 rounded-2xl bg-white border-2 border-transparent focus:border-primary outline-none transition-all">
+                            </div>
+                            <button onclick="sendPartnerInvite()" class="w-full h-12 bg-primary text-white rounded-xl font-bold">
+                                שליחת הזמנה בוואטסאפ
+                            </button>
+                        </div>
+                    ` : ''}
+                </section>
+            ` : ''}
+
             <button onclick="logout()" class="w-full bg-rose-50 text-rose-600 py-4 rounded-2xl font-bold flex items-center justify-center gap-2 active:bg-rose-100 transition-all mt-6">
                 <span class="material-symbols-outlined">logout</span>
                 התנתקות מהמערכת
@@ -1383,6 +1435,11 @@ async function updateCycleStartDay(day) {
 
 function switchHomeChart(type) {
     state.activeHomeChart = type;
+    render();
+}
+
+function togglePartnerInvitePanel() {
+    state.partnerInviteExpanded = !state.partnerInviteExpanded;
     render();
 }
 

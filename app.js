@@ -79,6 +79,8 @@ const state = {
     isLoading: false,
     loadingCount: 0,
     loadingMessage: 'טוען נתונים...',
+    saveQueueSize: 0,
+    quickAddLastHandled: '',
     partnerInviteExpanded: false,
     onboardingStep: 0,
     onboardingData: {
@@ -98,6 +100,7 @@ const state = {
 const ONBOARDING_DONE_KEY = 'budget_onboarding_completed_v1';
 const ONBOARDING_DRAFT_KEY = 'budget_onboarding_draft_v1';
 const PERF_LOGS_ENABLED = true;
+let saveQueuePromise = Promise.resolve();
 
 function perfNow() {
     if (typeof performance !== 'undefined' && performance.now) return performance.now();
@@ -182,6 +185,13 @@ function getLoginPrefillFromHash() {
         backend: params.get('backend') || '',
         inviteToken: params.get('inviteToken') || ''
     };
+}
+
+function getHashParams() {
+    const rawHash = window.location.hash || '';
+    const clean = rawHash.startsWith('#') ? rawHash.slice(1) : rawHash;
+    const parts = clean.split('?');
+    return new URLSearchParams(parts[1] || '');
 }
 
 function parseDateLocal(dateStr) {
@@ -351,6 +361,7 @@ function render() {
     // Re-attach event listeners and initialize charts if needed
     attachEventListeners();
     initCharts();
+    handleQuickAddFromHash();
     perfLog('render()', renderStart, `path=${state.currentPath}`);
 }
 
@@ -787,8 +798,8 @@ function renderTransactions() {
                             </div>
                         </div>
                         <div class="text-left">
-                            <p class="font-black text-lg ${t.type.includes('income') ? 'text-emerald-600' : 'text-rose-600'}">
-                                ${t.type.includes('income') ? '+' : '-'}${formatCurrency(t.amount)}
+                            <p class="font-black text-lg ${t.type === 'savings_deposit' ? 'text-blue-600' : (t.type.includes('income') ? 'text-emerald-600' : 'text-rose-600')}">
+                                ${t.type.includes('income') ? '' : '-'}${formatCurrency(t.amount)}
                             </p>
                             ${t.isRecurring ? '<span class="text-[8px] font-bold bg-surface-variant/30 px-1.5 py-0.5 rounded-full uppercase tracking-tighter">קבוע</span>' : ''}
                         </div>
@@ -809,6 +820,35 @@ function updateTransactionFilter(key, value) {
     urlParams.set(key, value);
     if (key === 'filter') urlParams.set('category', 'all'); // Reset category when changing main filter
     navigate(`/transactions?${urlParams.toString()}`);
+}
+
+function handleQuickAddFromHash() {
+    const basePath = state.currentPath.split('?')[0];
+    if (basePath !== '/transactions') return;
+
+    const params = getHashParams();
+    if (params.get('quickAdd') !== '1') return;
+
+    const merchant = String(params.get('merchant') || '').trim();
+    const amount = Number(params.get('amount') || 0);
+    const date = String(params.get('date') || formatDateLocal(new Date())).trim();
+    const type = String(params.get('type') || 'variable_expense').trim();
+    const signature = [merchant, amount, date, type].join('|');
+
+    if (!merchant || !amount || state.quickAddLastHandled === signature) return;
+    state.quickAddLastHandled = signature;
+
+    setTimeout(() => {
+        renderTransactionModal({
+            name: merchant,
+            amount: amount,
+            date: date,
+            type: type,
+            category: 'אחר',
+            isRecurring: false,
+            desc: merchant
+        });
+    }, 0);
 }
 
 function renderSavings() {
@@ -1444,7 +1484,7 @@ function renderSettings() {
 async function updateCycleStartDay(day) {
     state.settings.cycleStartDay = day;
     localStorage.setItem('budget_settings', JSON.stringify(state.settings));
-    await saveDataToGAS('updateSettings', state.settings);
+    await saveDataToGAS('updateSettings', state.settings, { showLoading: true });
 }
 
 function switchHomeChart(type) {
@@ -1952,46 +1992,59 @@ async function fetchDataFromGAS(options = {}) {
     }
 }
 
-async function saveDataToGAS(action, data) {
+async function saveDataToGAS(action, data, options = {}) {
     const totalStart = perfNow();
     if (!state.settings.scriptUrl || !state.settings.secretKey) return;
-    startLoading('שומר ומסנכרן נתונים...');
+    const showLoading = options.showLoading === true;
 
-    try {
-        const prepStart = perfNow();
-        const form = new URLSearchParams();
-        form.set('secret', state.settings.secretKey);
-        form.set('action', action);
-        form.set('payload', JSON.stringify(data || {}));
-        perfLog('saveDataToGAS preparePayload', prepStart, `action=${action}`);
+    state.saveQueueSize += 1;
+    if (showLoading) startLoading('שומר ומסנכרן נתונים...');
 
-        const networkStart = perfNow();
-        const response = await fetch(state.settings.scriptUrl, {
-            method: 'POST',
-            body: form
-        });
-        perfLog('saveDataToGAS network', networkStart, `action=${action}, status=${response.status}`);
+    const runSave = async () => {
+        try {
+            const prepStart = perfNow();
+            const form = new URLSearchParams();
+            form.set('secret', state.settings.secretKey);
+            form.set('action', action);
+            form.set('payload', JSON.stringify(data || {}));
+            perfLog('saveDataToGAS preparePayload', prepStart, `action=${action}`);
 
-        if (!response.ok) {
-            throw new Error(`Save failed with HTTP ${response.status}`);
+            const networkStart = perfNow();
+            const response = await fetch(state.settings.scriptUrl, {
+                method: 'POST',
+                body: form
+            });
+            perfLog('saveDataToGAS network', networkStart, `action=${action}, status=${response.status}`);
+
+            if (!response.ok) {
+                throw new Error(`Save failed with HTTP ${response.status}`);
+            }
+
+            const parseStart = perfNow();
+            const result = await response.json();
+            perfLog('saveDataToGAS parseJSON', parseStart, `action=${action}`);
+            const bootstrap = result && result.state && result.state.ok ? result.state : result;
+            if (applyBootstrapData(bootstrap)) {
+                render();
+            } else {
+                // Fallback for unexpected backend payload shape.
+                await fetchDataFromGAS({ showLoading: false });
+            }
+        } catch (error) {
+            console.error('Error saving data:', error);
+            // Recovery sync if save failed.
+            try {
+                await fetchDataFromGAS({ showLoading: false });
+            } catch (_) {}
+        } finally {
+            state.saveQueueSize = Math.max(0, state.saveQueueSize - 1);
+            perfLog('saveDataToGAS total', totalStart, `action=${action}, queue=${state.saveQueueSize}`);
+            if (showLoading) stopLoading();
         }
+    };
 
-        const parseStart = perfNow();
-        const result = await response.json();
-        perfLog('saveDataToGAS parseJSON', parseStart, `action=${action}`);
-        const bootstrap = result && result.state && result.state.ok ? result.state : result;
-        if (applyBootstrapData(bootstrap)) {
-            render();
-        } else {
-            // Fallback for unexpected backend payload shape.
-            await fetchDataFromGAS({ showLoading: false });
-        }
-    } catch (error) {
-        console.error('Error saving data:', error);
-    } finally {
-        perfLog('saveDataToGAS total', totalStart, `action=${action}`);
-        stopLoading();
-    }
+    saveQueuePromise = saveQueuePromise.then(runSave);
+    return saveQueuePromise;
 }
 
 // --- Modal Management ---
@@ -2024,7 +2077,7 @@ function closeModal() {
 }
 
 function renderTransactionModal(transaction = null) {
-    const isEdit = !!transaction;
+    const isEdit = !!(transaction && transaction.id);
     const title = isEdit ? 'עריכת תנועה' : 'תנועה חדשה';
     
     const html = `

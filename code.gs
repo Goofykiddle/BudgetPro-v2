@@ -76,12 +76,10 @@ function validateSecret_(provided) {
 }
 
 function doGet(e) {
-  ensureAppSheets_();
   return handleApiRequest_(e);
 }
 
 function doPost(e) {
-  ensureAppSheets_();
   return handleApiRequest_(e);
 }
 
@@ -267,7 +265,11 @@ function upsertSettings(payload) {
   ensureAppSheets_();
   const merged = Object.assign({}, readSettings_(), payload || {});
   writeSettings_(merged);
-  return getBootstrapData();
+  return {
+    ok: true,
+    updatedAt: new Date().toISOString(),
+    settings: normalizeSettingsObject_(merged)
+  };
 }
 
 function upsertTransaction(payload) {
@@ -281,15 +283,19 @@ function upsertTransaction(payload) {
 
   return {
     ok: true,
-    transaction: item,
-    state: getBootstrapData()
+    updatedAt: new Date().toISOString(),
+    transaction: item
   };
 }
 
 function deleteTransaction(id) {
   ensureAppSheets_();
-  removeById_(APP.SHEETS.TRANSACTIONS, APP.HEADERS.TRANSACTIONS, id);
-  return getBootstrapData();
+  const deletedId = removeById_(APP.SHEETS.TRANSACTIONS, APP.HEADERS.TRANSACTIONS, id);
+  return {
+    ok: true,
+    updatedAt: new Date().toISOString(),
+    deletedId: deletedId
+  };
 }
 
 function upsertSavingsGoal(payload) {
@@ -303,15 +309,19 @@ function upsertSavingsGoal(payload) {
 
   return {
     ok: true,
-    savingsGoal: item,
-    state: getBootstrapData()
+    updatedAt: new Date().toISOString(),
+    savingsGoal: item
   };
 }
 
 function deleteSavingsGoal(id) {
   ensureAppSheets_();
-  removeById_(APP.SHEETS.SAVINGS_GOALS, APP.HEADERS.SAVINGS_GOALS, id);
-  return getBootstrapData();
+  const deletedId = removeById_(APP.SHEETS.SAVINGS_GOALS, APP.HEADERS.SAVINGS_GOALS, id);
+  return {
+    ok: true,
+    updatedAt: new Date().toISOString(),
+    deletedId: deletedId
+  };
 }
 
 function upsertAccountBalance(payload) {
@@ -325,15 +335,19 @@ function upsertAccountBalance(payload) {
 
   return {
     ok: true,
-    accountBalance: item,
-    state: getBootstrapData()
+    updatedAt: new Date().toISOString(),
+    accountBalance: item
   };
 }
 
 function deleteAccountBalance(id) {
   ensureAppSheets_();
-  removeById_(APP.SHEETS.ACCOUNT_BALANCES, APP.HEADERS.ACCOUNT_BALANCES, id);
-  return getBootstrapData();
+  const deletedId = removeById_(APP.SHEETS.ACCOUNT_BALANCES, APP.HEADERS.ACCOUNT_BALANCES, id);
+  return {
+    ok: true,
+    updatedAt: new Date().toISOString(),
+    deletedId: deletedId
+  };
 }
 
 function upsertCategory(value) {
@@ -346,7 +360,11 @@ function upsertCategory(value) {
   if (categories.indexOf(name) === -1) categories.push(name);
   writeCategories_(categories);
 
-  return getBootstrapData();
+  return {
+    ok: true,
+    updatedAt: new Date().toISOString(),
+    categories: categories
+  };
 }
 
 function deleteCategory(value) {
@@ -360,7 +378,11 @@ function deleteCategory(value) {
   });
 
   writeCategories_(categories);
-  return getBootstrapData();
+  return {
+    ok: true,
+    updatedAt: new Date().toISOString(),
+    categories: categories
+  };
 }
 
 function clearAllData() {
@@ -644,39 +666,61 @@ function writeCategories_(categories) {
 function upsertById_(sheetName, headers, payload, normalizeFn) {
   payload = payload || {};
 
-  const rows = readObjects_(sheetName, headers);
+  const sheet = getSheet_(sheetName, headers);
+  const rowCount = sheet.getLastRow();
   const id = String(payload.id || '').trim();
-  let index = -1;
+  const idColumn = headers.indexOf('id') + 1;
 
-  if (id) {
-    for (let i = 0; i < rows.length; i++) {
-      if (String(rows[i].id || '').trim() === id) {
-        index = i;
+  let targetSheetRow = -1;
+  let existing = {};
+  if (id && idColumn > 0 && rowCount >= 2) {
+    const idValues = sheet.getRange(2, idColumn, rowCount - 1, 1).getValues();
+    for (let i = 0; i < idValues.length; i++) {
+      if (String(idValues[i][0] || '').trim() === id) {
+        targetSheetRow = i + 2;
         break;
       }
     }
   }
 
-  if (index >= 0) {
-    rows[index] = normalizeFn(Object.assign({}, rows[index], payload));
-  } else {
-    rows.push(normalizeFn(payload));
-    index = rows.length - 1;
+  if (targetSheetRow >= 2) {
+    const raw = sheet.getRange(targetSheetRow, 1, 1, headers.length).getValues()[0];
+    headers.forEach(function(h, i) {
+      existing[h] = raw[i];
+    });
   }
 
-  writeTableFromObjects_(sheetName, headers, rows);
-  return rows[index];
+  const normalized = normalizeFn(Object.assign({}, existing, payload));
+  const rowValues = headers.map(function(h) {
+    return normalized[h];
+  });
+
+  if (targetSheetRow >= 2) {
+    sheet.getRange(targetSheetRow, 1, 1, headers.length).setValues([rowValues]);
+  } else {
+    sheet.getRange(rowCount + 1, 1, 1, headers.length).setValues([rowValues]);
+  }
+
+  return normalized;
 }
 
 function removeById_(sheetName, headers, id) {
+  const sheet = getSheet_(sheetName, headers);
   const target = String(id || '').trim();
-  if (!target) return;
+  if (!target) return '';
+  const rowCount = sheet.getLastRow();
+  const idColumn = headers.indexOf('id') + 1;
+  if (rowCount < 2 || idColumn <= 0) return '';
 
-  const rows = readObjects_(sheetName, headers).filter(function(row) {
-    return String(row.id || '').trim() !== target;
-  });
+  const idValues = sheet.getRange(2, idColumn, rowCount - 1, 1).getValues();
+  for (let i = 0; i < idValues.length; i++) {
+    if (String(idValues[i][0] || '').trim() === target) {
+      sheet.deleteRow(i + 2);
+      return target;
+    }
+  }
 
-  writeTableFromObjects_(sheetName, headers, rows);
+  return '';
 }
 
 function parsePayload_(raw) {
@@ -773,11 +817,15 @@ function ensureAppSheets_() {
     getSheet_(APP.SHEETS[key], APP.HEADERS[key] || ['value']);
   });
 
-  const settings = readSettings_();
-  writeSettings_(settings);
+  const settingsSheet = getSheet_(APP.SHEETS.SETTINGS, APP.HEADERS.SETTINGS);
+  if (settingsSheet.getLastRow() < 2) {
+    writeSettings_(APP.DEFAULT_SETTINGS);
+  }
 
-  const categories = readCategories_();
-  writeCategories_(categories);
+  const categoriesSheet = getSheet_(APP.SHEETS.CATEGORIES, APP.HEADERS.CATEGORIES);
+  if (categoriesSheet.getLastRow() < 2) {
+    writeCategories_(APP.DEFAULT_CATEGORIES.slice());
+  }
 }
 
 function getSheet_(sheetName, headers) {

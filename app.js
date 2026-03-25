@@ -1951,6 +1951,82 @@ function applyBootstrapData(result) {
     return true;
 }
 
+function applyActionResultLocally(action, result, payload) {
+    if (!result || !result.ok) return false;
+
+    const upsertInList = (list, item) => {
+        if (!item || !item.id) return list;
+        const index = list.findIndex((v) => v && v.id === item.id);
+        if (index === -1) return [...list, item];
+        const next = list.slice();
+        next[index] = item;
+        return next;
+    };
+
+    if (result.state && result.state.ok) {
+        return applyBootstrapData(result.state);
+    }
+
+    if ((action === 'upsertSettings' || action === 'updateSettings') && result.settings) {
+        state.settings = {
+            ...state.settings,
+            ...result.settings,
+            scriptUrl: state.settings.scriptUrl,
+            secretKey: state.settings.secretKey
+        };
+        return true;
+    }
+
+    if ((action === 'addTransaction' || action === 'upsertTransaction' || action === 'updateTransaction') && result.transaction) {
+        const tx = {
+            ...result.transaction,
+            frequency: result.transaction.type === 'fixed_expense' && !FREQUENCIES[result.transaction.frequency]
+                ? 'monthly'
+                : result.transaction.frequency
+        };
+        state.transactions = upsertInList(state.transactions, tx);
+        return true;
+    }
+
+    if (action === 'deleteTransaction' && result.deletedId) {
+        state.transactions = state.transactions.filter((t) => String(t.id) !== String(result.deletedId));
+        return true;
+    }
+
+    if ((action === 'addSavingsGoal' || action === 'upsertSavingsGoal' || action === 'updateSavingsGoal') && result.savingsGoal) {
+        state.savingsGoals = upsertInList(state.savingsGoals, result.savingsGoal);
+        return true;
+    }
+
+    if (action === 'deleteSavingsGoal' && result.deletedId) {
+        state.savingsGoals = state.savingsGoals.filter((g) => String(g.id) !== String(result.deletedId));
+        return true;
+    }
+
+    if ((action === 'addAccountBalance' || action === 'upsertAccountBalance' || action === 'updateAccountBalance') && result.accountBalance) {
+        state.accountBalances = upsertInList(state.accountBalances, result.accountBalance);
+        return true;
+    }
+
+    if (action === 'deleteAccountBalance' && result.deletedId) {
+        state.accountBalances = state.accountBalances.filter((a) => String(a.id) !== String(result.deletedId));
+        return true;
+    }
+
+    if ((action === 'addCategory' || action === 'upsertCategory') && result.categories) {
+        state.categories = result.categories.map((cat) => (typeof cat === 'string' ? { name: cat, icon: 'category' } : cat));
+        return true;
+    }
+
+    if (action === 'deleteCategory' && result.categories) {
+        state.categories = result.categories.map((cat) => (typeof cat === 'string' ? { name: cat, icon: 'category' } : cat));
+        return true;
+    }
+
+    // Fallback: apply any full bootstrap-like payload if returned.
+    return applyBootstrapData(result);
+}
+
 async function fetchDataFromGAS(options = {}) {
     const totalStart = perfNow();
     if (!state.settings.scriptUrl || !state.settings.secretKey) return;
@@ -2023,8 +2099,7 @@ async function saveDataToGAS(action, data, options = {}) {
             const parseStart = perfNow();
             const result = await response.json();
             perfLog('saveDataToGAS parseJSON', parseStart, `action=${action}`);
-            const bootstrap = result && result.state && result.state.ok ? result.state : result;
-            if (applyBootstrapData(bootstrap)) {
+            if (applyActionResultLocally(action, result, data)) {
                 render();
             } else {
                 // Fallback for unexpected backend payload shape.

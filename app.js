@@ -2328,7 +2328,7 @@ function renderTransactionModal(transaction = null) {
                         </select>
                     </div>
 
-                    <div id="variable-price-section" class="${transaction?.type === 'fixed_expense' ? '' : 'hidden'} flex items-center justify-between bg-surface-variant/10 p-4 rounded-2xl border border-surface-variant/30">
+                    <div id="variable-price-section" class="${(transaction?.type === 'fixed_expense' || transaction?.type === 'variable_expense') ? '' : 'hidden'} flex items-center justify-between bg-surface-variant/10 p-4 rounded-2xl border border-surface-variant/30">
                         <div class="flex flex-col">
                             <label for="isVariablePrice" class="text-sm font-bold">מחיר משתנה</label>
                             <p class="text-[10px] text-on-surface-variant">הוצאה שסכומה משתנה (כמו חשמל)</p>
@@ -2382,7 +2382,7 @@ function renderTransactionModal(transaction = null) {
             isRecurring: isRecurring,
             frequency: isRecurring ? (formData.get('frequency') || transaction?.frequency || 'monthly') : '',
             alert: (type === 'fixed_expense' || type === 'variable_expense') ? (formData.get('alert') === 'on') : false,
-            isVariablePrice: type === 'fixed_expense' ? isVariablePrice : false,
+            isVariablePrice: (type === 'fixed_expense' || type === 'variable_expense') ? isVariablePrice : false,
             lastMonthAmount: (isVariablePrice && isEdit) ? transaction.amount : (transaction?.lastMonthAmount || 0),
             desc: formData.get('name')
         };
@@ -2410,7 +2410,7 @@ function toggleFrequencyDisplay(type) {
     }
 
     if (varPriceSection) {
-        if (type === 'fixed_expense') varPriceSection.classList.remove('hidden');
+        if (type === 'fixed_expense' || type === 'variable_expense') varPriceSection.classList.remove('hidden');
         else varPriceSection.classList.add('hidden');
     }
 

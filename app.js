@@ -612,25 +612,25 @@ function renderHome() {
                     <div class="w-12 h-12 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center">
                         <span class="material-symbols-outlined">add</span>
                     </div>
-                    <span class="text-[10px] font-medium">הכנסה</span>
+                    <span class="text-xs font-semibold">הכנסה</span>
                 </button>
                 <button onclick="renderTransactionModal({ type: 'variable_expense' })" class="flex flex-col items-center gap-2 p-3 rounded-2xl bg-surface-variant/30 hover:bg-surface-variant/50 transition-colors">
                     <div class="w-12 h-12 rounded-full bg-rose-100 text-rose-700 flex items-center justify-center">
                         <span class="material-symbols-outlined">remove</span>
                     </div>
-                    <span class="text-[10px] font-medium">הוצאה</span>
+                    <span class="text-xs font-semibold">הוצאה</span>
                 </button>
                 <button onclick="renderSavingsModal()" class="flex flex-col items-center gap-2 p-3 rounded-2xl bg-surface-variant/30 hover:bg-surface-variant/50 transition-colors">
                     <div class="w-12 h-12 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center">
                         <span class="material-symbols-outlined">savings</span>
                     </div>
-                    <span class="text-[10px] font-medium">חיסכון</span>
+                    <span class="text-xs font-semibold">חיסכון</span>
                 </button>
                 <button onclick="renderAccountModal()" class="flex flex-col items-center gap-2 p-3 rounded-2xl bg-surface-variant/30 hover:bg-surface-variant/50 transition-colors">
                     <div class="w-12 h-12 rounded-full bg-purple-100 text-purple-700 flex items-center justify-center">
                         <span class="material-symbols-outlined">account_balance</span>
                     </div>
-                    <span class="text-[10px] font-medium">חשבון</span>
+                    <span class="text-xs font-semibold">חשבון</span>
                 </button>
             </div>
 
@@ -824,25 +824,25 @@ function renderTransactions() {
                     <div class="w-12 h-12 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center">
                         <span class="material-symbols-outlined">add</span>
                     </div>
-                    <span class="text-[10px] font-medium">הכנסה</span>
+                    <span class="text-xs font-semibold">הכנסה</span>
                 </button>
                 <button onclick="renderTransactionModal({ type: 'variable_expense' })" class="flex flex-col items-center gap-2 p-3 rounded-2xl bg-surface-variant/30 hover:bg-surface-variant/50 transition-colors">
                     <div class="w-12 h-12 rounded-full bg-rose-100 text-rose-700 flex items-center justify-center">
                         <span class="material-symbols-outlined">remove</span>
                     </div>
-                    <span class="text-[10px] font-medium">הוצאה</span>
+                    <span class="text-xs font-semibold">הוצאה</span>
                 </button>
                 <button onclick="renderSavingsModal()" class="flex flex-col items-center gap-2 p-3 rounded-2xl bg-surface-variant/30 hover:bg-surface-variant/50 transition-colors">
                     <div class="w-12 h-12 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center">
                         <span class="material-symbols-outlined">savings</span>
                     </div>
-                    <span class="text-[10px] font-medium">חיסכון</span>
+                    <span class="text-xs font-semibold">חיסכון</span>
                 </button>
                 <button onclick="renderAccountModal()" class="flex flex-col items-center gap-2 p-3 rounded-2xl bg-surface-variant/30 hover:bg-surface-variant/50 transition-colors">
                     <div class="w-12 h-12 rounded-full bg-purple-100 text-purple-700 flex items-center justify-center">
                         <span class="material-symbols-outlined">account_balance</span>
                     </div>
-                    <span class="text-[10px] font-medium">חשבון</span>
+                    <span class="text-xs font-semibold">חשבון</span>
                 </button>
             </div>
 
@@ -866,7 +866,7 @@ function renderTransactions() {
             <!-- Filter Navigation -->
             <div class="flex bg-surface-variant/20 p-1.5 rounded-2xl">
                 ${['all', 'fixed', 'variable', 'income', 'expense'].map(f => `
-                    <button onclick="updateTransactionFilter('filter', '${f}')" class="flex-1 py-2.5 rounded-xl text-xs font-bold transition-all ${filterType === f ? 'bg-white text-primary shadow-sm' : 'text-on-surface-variant'}">
+                    <button onclick="updateTransactionFilter('filter', '${f}')" class="flex-1 py-2.5 rounded-xl text-sm font-bold transition-all ${filterType === f ? 'bg-white text-primary shadow-sm' : 'text-on-surface-variant'}">
                         ${f === 'all' ? 'הכל' : f === 'fixed' ? 'קבועות' : f === 'variable' ? 'משתנות' : f === 'income' ? 'הכנסות' : 'הוצאות'}
                     </button>
                 `).join('')}
@@ -1146,7 +1146,7 @@ function renderForecast() {
                                 <div class="text-left relative">
                                     <button onclick="toggleForecastTooltip('total-${index}')" class="text-left">
                                         <p class="text-sm font-bold text-primary/70 uppercase tracking-wider">יתרה סופית</p>
-                                        <p class="text-3xl font-black text-primary leading-tight">${formatCurrency(item.total)}</p>
+                                        <p class="text-2xl font-black text-primary leading-tight">${formatCurrency(item.total)}</p>
                                         <p class="text-xs text-primary/80 mt-1">
                                             עו״ש: ${formatCurrency(item.checking, false)} | חיסכון: ${formatCurrency(item.savings, false)}
                                         </p>

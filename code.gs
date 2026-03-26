@@ -21,7 +21,9 @@ const APP = {
       'frequency',
       'alert',
       'goalId',
-      'cycleDate'
+      'cycleDate',
+      'isVariablePrice',
+      'lastMonthAmount'
     ],
     SAVINGS_GOALS: [
       'id',
@@ -501,7 +503,9 @@ function normalizeTransactionRow_(row) {
     frequency: normalizeNullableString_(row.frequency),
     alert: toBool_(row.alert),
     goalId: normalizeNullableString_(row.goalId),
-    cycleDate: normalizeNullableString_(row.cycleDate)
+    cycleDate: normalizeNullableString_(row.cycleDate),
+    isVariablePrice: toBool_(row.isVariablePrice),
+    lastMonthAmount: toNumber_(row.lastMonthAmount)
   };
 }
 

@@ -2064,7 +2064,8 @@ function applyActionResultLocally(action, result, payload) {
         const index = list.findIndex((v) => v && v.id === item.id);
         if (index === -1) return [...list, item];
         const next = list.slice();
-        next[index] = item;
+        // Keep existing fields if backend response is partial.
+        next[index] = { ...next[index], ...item };
         return next;
     };
 

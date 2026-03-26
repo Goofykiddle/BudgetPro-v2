@@ -2108,10 +2108,6 @@ function applyActionResultLocally(action, result, payload) {
         return next;
     };
 
-    if (result.state && result.state.ok) {
-        return applyBootstrapData(result.state);
-    }
-
     if ((action === 'upsertSettings' || action === 'updateSettings') && result.settings) {
         state.settings = {
             ...state.settings,
@@ -2166,6 +2162,13 @@ function applyActionResultLocally(action, result, payload) {
     if (action === 'deleteCategory' && result.categories) {
         state.categories = result.categories.map((cat) => (typeof cat === 'string' ? { name: cat, icon: 'category' } : cat));
         return true;
+    }
+
+    if (result.state && result.state.ok) {
+        // Fallback for older backend payloads that still return full state.
+        // Action-specific handlers above intentionally win to avoid accidental
+        // state wipe from malformed legacy bootstrap responses.
+        return applyBootstrapData(result.state);
     }
 
     // Fallback: apply any full bootstrap-like payload if returned.

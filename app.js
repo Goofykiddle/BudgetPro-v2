@@ -237,12 +237,51 @@ function getCycleDates(date = new Date()) {
 
 function getFilteredTransactions(filterType, date = new Date()) {
     const { start, end } = getCycleDates(date);
+    const cycleMonth = start.getMonth();
+    const cycleYear = start.getFullYear();
 
-    // Base transactions
-    let baseFiltered = state.transactions.filter(t => {
+    function appliesByFrequencyForCycle(transaction) {
+        const freq = String(transaction?.frequency || 'monthly');
+        const base = parseDateLocal(transaction?.date);
+        const monthsDiff = (cycleYear - base.getFullYear()) * 12 + (cycleMonth - base.getMonth());
+        if (monthsDiff < 0) return false;
+        if (freq === 'monthly') return true;
+        if (freq === 'bi-monthly') return monthsDiff % 2 === 0;
+        if (freq === 'quarterly') return monthsDiff % 3 === 0;
+        if (freq === 'semi-annually') return monthsDiff % 6 === 0;
+        if (freq === 'annually' || freq === 'annual') return monthsDiff % 12 === 0;
+        return true;
+    }
+
+    function toCycleDate(originalDate) {
+        const base = parseDateLocal(originalDate);
+        const requestedDay = base.getDate();
+        const maxDay = new Date(cycleYear, cycleMonth + 1, 0).getDate();
+        const day = Math.min(requestedDay, maxDay);
+        return formatDateLocal(new Date(cycleYear, cycleMonth, day));
+    }
+
+    // Build current cycle transactions:
+    // - One-time transactions: only if date is inside cycle.
+    // - Recurring transactions: included by frequency even if original date was months ago.
+    let baseFiltered = [];
+    state.transactions.forEach((t) => {
+        if (!t) return;
+        if (t.type === 'savings_deposit' && t.amount === 0 && t.goalId) return;
+
         const tDate = parseDateLocal(t.date);
-        if (t.type === 'savings_deposit' && t.amount === 0 && t.goalId) return false;
-        return tDate >= start && tDate < end;
+        const inRange = tDate >= start && tDate < end;
+        if (!t.isRecurring) {
+            if (inRange) baseFiltered.push(t);
+            return;
+        }
+
+        if (!appliesByFrequencyForCycle(t)) return;
+
+        baseFiltered.push({
+            ...t,
+            date: toCycleDate(t.date)
+        });
     });
 
     // Add automatic savings deposits

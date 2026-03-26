@@ -94,7 +94,9 @@ const state = {
         spouseSalary: '',
         fixedExpense: ''
     },
-    error: null
+    error: null,
+    reminderModalOpen: false,
+    forecastTooltipOpen: null
 };
 
 const ONBOARDING_DONE_KEY = 'budget_onboarding_completed_v1';
@@ -362,7 +364,97 @@ function render() {
     attachEventListeners();
     initCharts();
     handleQuickAddFromHash();
+    checkVariableExpenseReminders();
     perfLog('render()', renderStart, `path=${state.currentPath}`);
+}
+
+function getReminderStorageKey(transactionId, yearMonth) {
+    return `budget_var_expense_reminder_${transactionId}_${yearMonth}`;
+}
+
+function getNextMonthSameDay(dateStr) {
+    const base = parseDateLocal(dateStr);
+    const y = base.getFullYear();
+    const m = base.getMonth();
+    const d = base.getDate();
+    const maxDayNextMonth = new Date(y, m + 2, 0).getDate();
+    const next = new Date(y, m + 1, Math.min(d, maxDayNextMonth));
+    return formatDateLocal(next);
+}
+
+function checkVariableExpenseReminders() {
+    const basePath = state.currentPath.split('?')[0];
+    if (basePath === '/login' || basePath === '/onboarding') return;
+    if (state.reminderModalOpen) return;
+
+    const modalContainer = document.getElementById('modal-container');
+    if (!modalContainer || !modalContainer.classList.contains('hidden')) return;
+
+    const today = new Date();
+    const todayDay = today.getDate();
+    const yearMonth = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`;
+
+    const due = state.transactions
+        .filter((t) => t && t.type === 'variable_expense' && t.isRecurring && t.alert && t.date)
+        .filter((t) => {
+            const d = parseDateLocal(t.date);
+            return d.getDate() === todayDay;
+        })
+        .filter((t) => localStorage.getItem(getReminderStorageKey(t.id, yearMonth)) !== '1')
+        .sort((a, b) => String(a.name || '').localeCompare(String(b.name || ''), 'he'));
+
+    if (!due.length) return;
+    state.reminderModalOpen = true;
+    renderVariableExpenseReminderModal(due[0], yearMonth);
+}
+
+function renderVariableExpenseReminderModal(transaction, yearMonth) {
+    const html = `
+        <div class="space-y-5">
+            <div class="flex items-start justify-between">
+                <div>
+                    <h2 class="text-2xl font-black text-primary">תזכורת הוצאה משתנה</h2>
+                    <p class="text-sm text-on-surface-variant mt-1">שים/י לב, הגיע מועד עדכון ההוצאה:</p>
+                </div>
+                <button onclick="acknowledgeVariableExpenseReminder('${transaction.id}', '${yearMonth}', false)" class="w-10 h-10 flex items-center justify-center rounded-full hover:bg-surface-variant/50">
+                    <span class="material-symbols-outlined">close</span>
+                </button>
+            </div>
+
+            <div class="bg-surface-variant/20 rounded-2xl p-4 space-y-1">
+                <p class="font-extrabold text-lg">${transaction.name}</p>
+                <p class="text-on-surface-variant text-sm">תאריך נוכחי: ${transaction.date}</p>
+                <p class="text-rose-600 font-extrabold text-xl">${formatCurrency(transaction.amount)}</p>
+            </div>
+
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <button onclick="acknowledgeVariableExpenseReminder('${transaction.id}', '${yearMonth}', false)" class="h-12 rounded-xl bg-surface-variant/40 font-bold">
+                    אישור בלבד
+                </button>
+                <button onclick="acknowledgeVariableExpenseReminder('${transaction.id}', '${yearMonth}', true)" class="h-12 rounded-xl bg-primary text-white font-bold">
+                    אישור + עדכון לחודש הבא
+                </button>
+            </div>
+        </div>
+    `;
+    openModal(html);
+}
+
+function acknowledgeVariableExpenseReminder(transactionId, yearMonth, moveToNextMonth) {
+    localStorage.setItem(getReminderStorageKey(transactionId, yearMonth), '1');
+    state.reminderModalOpen = false;
+
+    if (moveToNextMonth) {
+        const tx = state.transactions.find((t) => String(t.id) === String(transactionId));
+        if (tx) {
+            const updated = { ...tx, date: getNextMonthSameDay(tx.date) };
+            state.transactions = state.transactions.map((t) => (String(t.id) === String(transactionId) ? updated : t));
+            saveDataToGAS('updateTransaction', updated);
+        }
+    }
+
+    closeModal();
+    render();
 }
 
 function renderLoadingOverlay() {
@@ -1042,7 +1134,7 @@ function renderForecast() {
             <div class="space-y-6">
                 <h3 class="text-2xl font-bold px-2">פירוט חודשי צפוי</h3>
                 <div class="space-y-4">
-                    ${forecastData.map(item => `
+                    ${forecastData.map((item, index) => `
                         <div class="bg-white p-6 rounded-3xl border border-surface-variant/30 shadow-sm">
                             <div class="flex items-center justify-between mb-4">
                                 <div class="flex items-center gap-3">
@@ -1051,17 +1143,17 @@ function renderForecast() {
                                     </div>
                                     <h4 class="text-lg font-extrabold">${item.fullMonth}</h4>
                                 </div>
-                                <div class="text-left group relative">
-                                    <div class="rounded-2xl px-4 py-2.5 bg-primary-container border border-primary/20 shadow-sm">
-                                        <p class="text-[10px] font-bold text-on-primary-container/70 uppercase tracking-wider">יתרה סופית</p>
-                                        <p class="text-xl font-black text-on-primary-container leading-tight">${formatCurrency(item.total)}</p>
-                                        <p class="text-[10px] text-on-primary-container/70 mt-1">
+                                <div class="text-left relative">
+                                    <button onclick="toggleForecastTooltip('total-${index}')" class="text-left">
+                                        <p class="text-sm font-bold text-primary/70 uppercase tracking-wider">יתרה סופית</p>
+                                        <p class="text-3xl font-black text-primary leading-tight">${formatCurrency(item.total)}</p>
+                                        <p class="text-xs text-primary/80 mt-1">
                                             עו״ש: ${formatCurrency(item.checking, false)} | חיסכון: ${formatCurrency(item.savings, false)}
                                         </p>
-                                    </div>
+                                    </button>
 
                                     <!-- Tooltip -->
-                                    <div class="absolute hidden group-hover:block group-active:block z-20 bottom-full left-0 mb-2 bg-surface-variant p-3 rounded-2xl shadow-xl border border-primary/20 min-w-[220px] text-right animate-in fade-in slide-in-from-bottom-1">
+                                    <div class="absolute ${state.forecastTooltipOpen === `total-${index}` ? 'block' : 'hidden'} z-20 bottom-full left-0 mb-2 bg-surface-variant p-3 rounded-2xl shadow-xl border border-primary/20 min-w-[220px] text-right animate-in fade-in slide-in-from-bottom-1">
                                         <p class="font-bold text-xs border-b border-primary/10 pb-1 mb-2">חישוב יתרה</p>
                                         <div class="space-y-1.5">
                                             <div class="flex justify-between gap-4">
@@ -1089,12 +1181,14 @@ function renderForecast() {
                                 </div>
                             </div>
                             <div class="grid grid-cols-3 gap-2 pt-4 border-t border-surface-variant/10">
-                                <div class="group relative">
-                                    <p class="text-[9px] font-bold text-on-surface-variant opacity-60 uppercase">הכנסות</p>
-                                    <p class="text-xs font-bold text-emerald-600">${formatCurrency(item.income)}</p>
+                                <div class="relative">
+                                    <button onclick="toggleForecastTooltip('income-${index}')" class="text-right">
+                                        <p class="text-sm font-bold text-on-surface-variant opacity-80 uppercase">הכנסות</p>
+                                        <p class="text-lg font-black text-emerald-600">${formatCurrency(item.income)}</p>
+                                    </button>
                                     
                                     <!-- Tooltip -->
-                                    <div class="absolute hidden group-hover:block group-active:block z-20 bottom-full right-0 mb-2 bg-white p-3 rounded-2xl shadow-xl border border-emerald-100 min-w-[160px] text-right animate-in fade-in slide-in-from-bottom-1">
+                                    <div class="absolute ${state.forecastTooltipOpen === `income-${index}` ? 'block' : 'hidden'} z-20 bottom-full right-0 mb-2 bg-white p-3 rounded-2xl shadow-xl border border-emerald-100 min-w-[160px] text-right animate-in fade-in slide-in-from-bottom-1">
                                         <p class="font-bold text-[10px] text-emerald-700 border-b border-emerald-50 pb-1 mb-2">פירוט הכנסות</p>
                                         <div class="space-y-2">
                                             ${item.incomeItems.length > 0 ? item.incomeItems.map(ii => `
@@ -1109,12 +1203,14 @@ function renderForecast() {
                                         </div>
                                     </div>
                                 </div>
-                                <div class="group relative">
-                                    <p class="text-[9px] font-bold text-on-surface-variant opacity-60 uppercase">הוצאות</p>
-                                    <p class="text-xs font-bold text-rose-600">${formatCurrency(-item.expense)}</p>
+                                <div class="relative">
+                                    <button onclick="toggleForecastTooltip('expense-${index}')" class="text-right">
+                                        <p class="text-sm font-bold text-on-surface-variant opacity-80 uppercase">הוצאות</p>
+                                        <p class="text-lg font-black text-rose-600">${formatCurrency(-item.expense)}</p>
+                                    </button>
                                     
                                     <!-- Tooltip -->
-                                    <div class="absolute hidden group-hover:block group-active:block z-20 bottom-full right-1/2 translate-x-1/2 mb-2 bg-white p-3 rounded-2xl shadow-xl border border-rose-100 min-w-[160px] text-right animate-in fade-in slide-in-from-bottom-1">
+                                    <div class="absolute ${state.forecastTooltipOpen === `expense-${index}` ? 'block' : 'hidden'} z-20 bottom-full right-1/2 translate-x-1/2 mb-2 bg-white p-3 rounded-2xl shadow-xl border border-rose-100 min-w-[160px] text-right animate-in fade-in slide-in-from-bottom-1">
                                         <p class="font-bold text-[10px] text-rose-700 border-b border-rose-50 pb-1 mb-2">פירוט הוצאות</p>
                                         <div class="space-y-2">
                                             ${item.expenseItems.length > 0 ? item.expenseItems.map(ei => `
@@ -1129,12 +1225,14 @@ function renderForecast() {
                                         </div>
                                     </div>
                                 </div>
-                                <div class="group relative">
-                                    <p class="text-[9px] font-bold text-on-surface-variant opacity-60 uppercase">חיסכון</p>
-                                    <p class="text-xs font-bold text-blue-600">${formatCurrency(-item.saving)}</p>
+                                <div class="relative">
+                                    <button onclick="toggleForecastTooltip('saving-${index}')" class="text-right">
+                                        <p class="text-sm font-bold text-on-surface-variant opacity-80 uppercase">חיסכון</p>
+                                        <p class="text-lg font-black text-blue-600">${formatCurrency(-item.saving)}</p>
+                                    </button>
                                     
                                     <!-- Tooltip -->
-                                    <div class="absolute hidden group-hover:block group-active:block z-20 bottom-full left-0 mb-2 bg-white p-3 rounded-2xl shadow-xl border border-blue-100 min-w-[160px] text-right animate-in fade-in slide-in-from-bottom-1">
+                                    <div class="absolute ${state.forecastTooltipOpen === `saving-${index}` ? 'block' : 'hidden'} z-20 bottom-full left-0 mb-2 bg-white p-3 rounded-2xl shadow-xl border border-blue-100 min-w-[160px] text-right animate-in fade-in slide-in-from-bottom-1">
                                         <p class="font-bold text-[10px] text-blue-700 border-b border-blue-50 pb-1 mb-2">פירוט חיסכון</p>
                                         <div class="space-y-2">
                                             ${item.savingsItems.length > 0 ? item.savingsItems.map(si => `
@@ -1313,7 +1411,7 @@ function generateForecastData() {
 }
 
 function renderSettings() {
-    const fixedExpenses = state.transactions.filter(t => t.type === 'fixed_expense');
+    const fixedExpenses = state.transactions.filter(t => t.type === 'fixed_expense' || (t.type === 'variable_expense' && t.isRecurring));
     const fixedIncome = state.transactions.filter(t => t.type === 'fixed_income');
 
     return `
@@ -1420,7 +1518,7 @@ function renderSettings() {
                 <div class="flex items-center justify-between">
                     <div class="flex items-center gap-2">
                         <span class="material-symbols-outlined text-rose-600">receipt_long</span>
-                        <h3 class="text-lg font-bold">הוצאות קבועות</h3>
+                        <h3 class="text-lg font-bold">הוצאות קבועות ומתעדכנות</h3>
                     </div>
                     <button onclick="renderTransactionModal({ type: 'fixed_expense' })" class="text-rose-600 font-bold text-sm flex items-center gap-1 hover:underline">
                         <span class="material-symbols-outlined text-sm">add_circle</span>
@@ -1438,6 +1536,8 @@ function renderSettings() {
                                     <p class="font-bold">${item.name}</p>
                                     <div class="flex items-center gap-2">
                                         <span class="px-2 py-0.5 bg-rose-50 text-rose-700 text-[10px] rounded-full font-bold">${((FREQUENCIES[item?.frequency]) || { label: 'חודשי' }).label}</span>
+                                        ${item.type === 'variable_expense' ? '<span class="px-2 py-0.5 bg-blue-50 text-blue-700 text-[10px] rounded-full font-bold">הוצאה משתנה מחזורית</span>' : ''}
+                                        ${item.alert ? '<span class="px-2 py-0.5 bg-amber-50 text-amber-700 text-[10px] rounded-full font-bold">תזכורת פעילה</span>' : ''}
                                         ${item.isVariablePrice ? '<span class="px-2 py-0.5 bg-amber-50 text-amber-700 text-[10px] rounded-full font-bold">מחיר משתנה</span>' : ''}
                                     </div>
                                 </div>
@@ -1479,6 +1579,11 @@ function renderSettings() {
             </button>
         </div>
     `;
+}
+
+function toggleForecastTooltip(key) {
+    state.forecastTooltipOpen = state.forecastTooltipOpen === key ? null : key;
+    render();
 }
 
 async function updateCycleStartDay(day) {
@@ -2212,7 +2317,7 @@ function renderTransactionModal(transaction = null) {
                     </div>
                 </div>
 
-                <div id="frequency-section" class="${transaction?.type?.startsWith('fixed') ? '' : 'hidden'} space-y-4">
+                <div id="frequency-section" class="${(transaction?.type?.startsWith('fixed') || (transaction?.type === 'variable_expense' && transaction?.isRecurring)) ? '' : 'hidden'} space-y-4">
                     <div class="space-y-1">
                         <label class="text-xs font-bold text-on-surface-variant uppercase tracking-wider px-1">תדירות</label>
                         <select name="frequency" class="w-full h-14 px-4 rounded-2xl bg-surface-variant/30 border-2 border-transparent focus:border-primary focus:bg-white outline-none transition-all appearance-none">
@@ -2231,8 +2336,15 @@ function renderTransactionModal(transaction = null) {
                     </div>
                 </div>
 
+                <div id="expense-reminder-section" class="${(transaction?.type === 'fixed_expense' || transaction?.type === 'variable_expense') ? '' : 'hidden'}">
+                    <label class="flex items-center gap-3 p-4 bg-amber-50 rounded-2xl border border-amber-100 cursor-pointer">
+                        <input type="checkbox" name="alert" ${transaction?.alert ? 'checked' : ''} class="w-5 h-5 rounded border-amber-300 text-amber-600 focus:ring-amber-400">
+                        <span class="text-sm font-bold text-amber-800">להפעיל תזכורת בתאריך החודשי של ההוצאה</span>
+                    </label>
+                </div>
+
                 <div class="flex items-center gap-2 py-2">
-                    <input type="checkbox" id="isRecurring" name="isRecurring" ${transaction?.isRecurring || transaction?.type?.startsWith('fixed') ? 'checked' : ''} class="w-5 h-5 rounded border-surface-variant text-primary focus:ring-primary">
+                    <input type="checkbox" id="isRecurring" name="isRecurring" onchange="toggleFrequencyDisplay(document.getElementById('transaction-type').value)" ${transaction?.isRecurring || transaction?.type?.startsWith('fixed') ? 'checked' : ''} class="w-5 h-5 rounded border-surface-variant text-primary focus:ring-primary">
                     <label for="isRecurring" class="text-sm font-bold">תנועה קבועה</label>
                 </div>
                 
@@ -2257,6 +2369,7 @@ function renderTransactionModal(transaction = null) {
         const formData = new FormData(e.target);
         const type = formData.get('type');
         const isVariablePrice = formData.get('isVariablePrice') === 'on';
+        const isRecurring = formData.get('isRecurring') === 'on' || type.startsWith('fixed');
         
         const data = {
             id: transaction?.id || Date.now().toString(),
@@ -2265,8 +2378,9 @@ function renderTransactionModal(transaction = null) {
             date: formData.get('date'),
             type: type,
             category: formData.get('category'),
-            isRecurring: formData.get('isRecurring') === 'on' || type.startsWith('fixed'),
-            frequency: type.startsWith('fixed') ? formData.get('frequency') : null,
+            isRecurring: isRecurring,
+            frequency: isRecurring ? (formData.get('frequency') || transaction?.frequency || 'monthly') : '',
+            alert: (type === 'fixed_expense' || type === 'variable_expense') ? (formData.get('alert') === 'on') : false,
             isVariablePrice: type === 'fixed_expense' ? isVariablePrice : false,
             lastMonthAmount: (isVariablePrice && isEdit) ? transaction.amount : (transaction?.lastMonthAmount || 0),
             desc: formData.get('name')
@@ -2279,19 +2393,29 @@ function renderTransactionModal(transaction = null) {
 function toggleFrequencyDisplay(type) {
     const freqSection = document.getElementById('frequency-section');
     const varPriceSection = document.getElementById('variable-price-section');
+    const reminderSection = document.getElementById('expense-reminder-section');
     const isRecurringCheckbox = document.getElementById('isRecurring');
-    
-    if (type.startsWith('fixed')) {
+
+    const shouldShowFrequency = type.startsWith('fixed') || (type === 'variable_expense' && isRecurringCheckbox && isRecurringCheckbox.checked);
+
+    if (shouldShowFrequency) {
         freqSection.classList.remove('hidden');
-        isRecurringCheckbox.checked = true;
-        if (type === 'fixed_expense') {
-            varPriceSection.classList.remove('hidden');
-        } else {
-            varPriceSection.classList.add('hidden');
-        }
     } else {
         freqSection.classList.add('hidden');
-        isRecurringCheckbox.checked = false;
+    }
+
+    if (type.startsWith('fixed') && isRecurringCheckbox) {
+        isRecurringCheckbox.checked = true;
+    }
+
+    if (varPriceSection) {
+        if (type === 'fixed_expense') varPriceSection.classList.remove('hidden');
+        else varPriceSection.classList.add('hidden');
+    }
+
+    if (reminderSection) {
+        if (type === 'fixed_expense' || type === 'variable_expense') reminderSection.classList.remove('hidden');
+        else reminderSection.classList.add('hidden');
     }
 }
 function handleSaveTransaction(data, isEdit) {

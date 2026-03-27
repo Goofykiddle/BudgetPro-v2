@@ -829,17 +829,15 @@ function renderHome() {
                 <!-- Content -->
                 <div class="p-3">
                     ${state.activeHomeChart === 'category' ? `
-                        <div class="flex flex-row-reverse gap-5 items-center">
+                        <div class="flex flex-row-reverse gap-3 md:gap-5 items-start md:items-center">
                             <!-- Doughnut Chart -->
-                            <div class="w-40 h-40 relative shrink-0">
+                            <div class="w-28 h-28 md:w-40 md:h-40 relative shrink-0 mx-auto">
                                 <canvas id="categoryChart"></canvas>
-                                <div class="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-                                    <p class="text-lg leading-tight text-center text-on-surface">עסקאות<br>החודש</p>
-                                </div>
                             </div>
 
                             <!-- Category List -->
                             <div class="flex-1 w-full space-y-2">
+                                <p class="text-xs md:text-sm font-bold text-on-surface-variant text-right mb-1">עסקאות החודש</p>
                                 ${(() => {
                                     const currentTransactions = getFilteredTransactions('all');
                                     const expenses = currentTransactions.filter(t => t.type.includes('expense'));
@@ -858,8 +856,8 @@ function renderHome() {
                                             return `
                                                 <div class="flex items-center justify-between">
                                                     <div class="text-right">
-                                                        <p class="font-black text-xl leading-tight">${formatCurrency(amount)}</p>
-                                                        <p class="text-xs text-on-surface-variant leading-tight">${cat}</p>
+                                                        <p class="font-black text-lg md:text-xl leading-tight">${formatCurrency(amount)}</p>
+                                                        <p class="text-[11px] md:text-xs text-on-surface-variant leading-tight">${cat}</p>
                                                     </div>
                                                     <div class="w-7 h-7 rounded-md bg-surface-variant/30 flex items-center justify-center text-primary">
                                                         <span class="material-symbols-outlined text-sm">${categoryObj.icon}</span>

@@ -829,9 +829,9 @@ function renderHome() {
                 <!-- Content -->
                 <div class="p-3">
                     ${state.activeHomeChart === 'category' ? `
-                        <div class="flex items-center gap-2 overflow-hidden" dir="ltr">
+                        <div class="grid grid-cols-[minmax(0,1fr)_128px] sm:grid-cols-[minmax(0,1fr)_160px] md:grid-cols-[minmax(0,1fr)_208px] gap-2 items-center overflow-hidden" dir="ltr">
                             <!-- Category List (Left) -->
-                            <div class="w-[54%] sm:w-1/2 space-y-2 min-w-0" dir="rtl">
+                            <div class="space-y-2 min-w-0" dir="rtl">
                                 ${(() => {
                                     const currentTransactions = getFilteredTransactions('all');
                                     const expenses = currentTransactions.filter(t => t.type.includes('expense'));
@@ -849,10 +849,10 @@ function renderHome() {
                                             return `
                                                 <div class="text-right">
                                                     <div class="flex items-center justify-end gap-2 leading-tight">
-                                                        <span class="font-black text-xl md:text-2xl">${formatCurrency(amount)}</span>
-                                                        <span class="material-symbols-outlined text-base text-primary">${categoryObj.icon}</span>
+                                                        <span class="font-black text-lg md:text-xl">${formatCurrency(amount)}</span>
+                                                        <span class="material-symbols-outlined text-sm text-primary">${categoryObj.icon}</span>
                                                     </div>
-                                                    <p class="text-sm text-on-surface-variant leading-tight">${cat}</p>
+                                                    <p class="text-xs md:text-sm text-on-surface-variant leading-tight">${cat}</p>
                                                 </div>
                                             `;
                                         }).join('');
@@ -860,13 +860,11 @@ function renderHome() {
                             </div>
 
                             <!-- Doughnut Chart (Right) -->
-                            <div class="w-[46%] sm:w-1/2 flex justify-center" dir="rtl">
-                                <div class="w-32 h-32 sm:w-40 sm:h-40 md:w-52 md:h-52 relative shrink-0">
+                            <div class="w-[128px] h-[128px] sm:w-[160px] sm:h-[160px] md:w-[208px] md:h-[208px] relative shrink-0 justify-self-center" dir="rtl">
                                     <canvas id="categoryChart"></canvas>
                                     <div class="absolute inset-0 flex items-center justify-center pointer-events-none">
-                                        <p class="text-xl md:text-3xl leading-tight text-center text-on-surface">עסקאות<br>החודש</p>
+                                        <p class="text-base md:text-2xl leading-tight text-center text-on-surface">עסקאות<br>החודש</p>
                                     </div>
-                                </div>
                             </div>
                         </div>
                         <div class="mt-2 text-center">

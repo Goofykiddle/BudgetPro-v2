@@ -96,7 +96,8 @@ const state = {
     },
     error: null,
     reminderModalOpen: false,
-    forecastTooltipOpen: null
+    forecastTooltipOpen: null,
+    goalRecurringSyncDone: false
 };
 
 const ONBOARDING_DONE_KEY = 'budget_onboarding_completed_v1';
@@ -277,6 +278,11 @@ function getFilteredTransactions(filterType, date = new Date()) {
         }
 
         if (!appliesByFrequencyForCycle(t)) return;
+        if (t.type === 'savings_deposit' && t.goalId) {
+            const skippedCycles = getSkippedCycleSetFromTransaction(t);
+            const currentCycleKey = `${cycleYear}-${String(cycleMonth + 1).padStart(2, '0')}`;
+            if (skippedCycles.has(currentCycleKey)) return;
+        }
 
         baseFiltered.push({
             ...t,
@@ -284,40 +290,7 @@ function getFilteredTransactions(filterType, date = new Date()) {
         });
     });
 
-    // Add automatic savings deposits
-    const autoSavings = [];
-    state.savingsGoals.forEach(goal => {
-        if (goal.startDate && goal.monthlyAmount && goal.depositDay) {
-            const goalStart = new Date(goal.startDate);
-            const cycleMonthStart = new Date(start);
-            const cycleDateKey = cycleMonthStart.toISOString();
-            
-            const exists = state.transactions.some(t => t.goalId === goal.id && t.cycleDate === cycleDateKey);
-            if (exists) return;
-
-            const monthsDiff = (cycleMonthStart.getFullYear() - goalStart.getFullYear()) * 12 + (cycleMonthStart.getMonth() - goalStart.getMonth());
-            
-            if (monthsDiff >= 0 && (!goal.durationMonths || monthsDiff < goal.durationMonths)) {
-                const depositDate = new Date(cycleMonthStart.getFullYear(), cycleMonthStart.getMonth(), goal.depositDay);
-                if (depositDate >= start && depositDate < end) {
-                    autoSavings.push({
-                        id: `auto-savings-${goal.id}-${cycleDateKey}`,
-                        name: `הפקדה: ${goal.name}`,
-                        amount: goal.monthlyAmount,
-                        type: 'savings_deposit',
-                        category: 'הפרשות לחסכון',
-                        date: formatDateLocal(depositDate),
-                        isRecurring: true,
-                        desc: 'הפקדה אוטומטית לחיסכון',
-                        goalId: goal.id,
-                        cycleDate: cycleDateKey
-                    });
-                }
-            }
-        }
-    });
-
-    let allTransactions = [...baseFiltered, ...autoSavings];
+    let allTransactions = baseFiltered;
 
     if (filterType === 'income') {
         allTransactions = allTransactions.filter(t => t.type === 'fixed_income' || t.type === 'variable_income');
@@ -409,6 +382,102 @@ function render() {
 
 function getReminderStorageKey(transactionId, yearMonth) {
     return `budget_var_expense_reminder_${transactionId}_${yearMonth}`;
+}
+
+function getCurrentCycleKey(date = new Date()) {
+    const { start } = getCycleDates(date);
+    return `${start.getFullYear()}-${String(start.getMonth() + 1).padStart(2, '0')}`;
+}
+
+function getSkippedCycleSetFromTransaction(tx) {
+    const raw = String(tx?.cycleDate || '').trim();
+    if (!raw.startsWith('skip:')) return new Set();
+    return new Set(
+        raw
+            .slice(5)
+            .split(',')
+            .map((v) => String(v || '').trim())
+            .filter(Boolean)
+    );
+}
+
+function buildSkippedCycleValue(set) {
+    const arr = Array.from(set).sort();
+    if (!arr.length) return '';
+    return `skip:${arr.join(',')}`;
+}
+
+function getGoalRecurringDepositTransaction(goalId) {
+    return state.transactions.find((t) =>
+        t &&
+        t.type === 'savings_deposit' &&
+        t.isRecurring &&
+        String(t.goalId || '') === String(goalId || '')
+    ) || null;
+}
+
+function buildGoalRecurringDepositTransaction(goal, existingId = '') {
+    const safeDay = Math.max(1, Math.min(28, Number(goal.depositDay) || 1));
+    const startDateRaw = goal.startDate || formatDateLocal(new Date());
+    const startDate = parseDateLocal(startDateRaw);
+    const y = startDate.getFullYear();
+    const m = startDate.getMonth();
+    const maxDay = new Date(y, m + 1, 0).getDate();
+    const date = formatDateLocal(new Date(y, m, Math.min(safeDay, maxDay)));
+
+    return {
+        id: existingId || `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+        name: `הפקדה: ${goal.name}`,
+        amount: Number(goal.monthlyAmount) || 0,
+        type: 'savings_deposit',
+        date: date,
+        category: 'הפרשות לחסכון',
+        isRecurring: true,
+        frequency: 'monthly',
+        goalId: goal.id,
+        desc: 'הפקדה חודשית מיעד חיסכון'
+    };
+}
+
+function shouldHaveGoalRecurringDeposit(goal) {
+    if (!goal) return false;
+    return !!(goal.id && goal.startDate && Number(goal.monthlyAmount) > 0 && Number(goal.depositDay) >= 1);
+}
+
+function syncRecurringDepositWithGoal(goal, isEdit) {
+    const existing = getGoalRecurringDepositTransaction(goal.id);
+    const shouldHave = shouldHaveGoalRecurringDeposit(goal);
+
+    if (!shouldHave) {
+        if (existing) {
+            state.transactions = state.transactions.filter((t) => String(t.id) !== String(existing.id));
+            saveDataToGAS('deleteTransaction', { id: existing.id });
+        }
+        return;
+    }
+
+    const tx = buildGoalRecurringDepositTransaction(goal, existing ? existing.id : '');
+    if (existing || isEdit) {
+        state.transactions = state.transactions.map((t) => (String(t.id) === String(tx.id) ? { ...t, ...tx } : t));
+        saveDataToGAS('updateTransaction', tx);
+    } else {
+        state.transactions.push(tx);
+        saveDataToGAS('addTransaction', tx);
+    }
+}
+
+function ensureGoalRecurringTransactionsSyncedOnce() {
+    if (state.goalRecurringSyncDone) return;
+    state.goalRecurringSyncDone = true;
+
+    state.savingsGoals.forEach((goal) => {
+        const existing = getGoalRecurringDepositTransaction(goal.id);
+        if (!existing && shouldHaveGoalRecurringDeposit(goal)) {
+            const tx = buildGoalRecurringDepositTransaction(goal);
+            state.transactions.push(tx);
+            saveDataToGAS('addTransaction', tx);
+        }
+    });
 }
 
 function getNextMonthSameDay(dateStr) {
@@ -2225,6 +2294,7 @@ async function fetchDataFromGAS(options = {}) {
         perfLog('fetchDataFromGAS parseJSON', parseStart);
         
         if (applyBootstrapData(result)) {
+            ensureGoalRecurringTransactionsSyncedOnce();
             render();
         } else {
             console.error('Failed to fetch data:', result && result.message);
@@ -2462,7 +2532,9 @@ function renderTransactionModal(transaction = null) {
             alert: (type === 'fixed_expense' || type === 'variable_expense') ? (formData.get('alert') === 'on') : false,
             isVariablePrice: (type === 'fixed_expense' || type === 'variable_expense') ? isVariablePrice : false,
             lastMonthAmount: (isVariablePrice && isEdit) ? transaction.amount : (transaction?.lastMonthAmount || 0),
-            desc: formData.get('name')
+            desc: formData.get('name'),
+            goalId: transaction?.goalId || '',
+            cycleDate: transaction?.cycleDate || ''
         };
         
         handleSaveTransaction(data, isEdit);
@@ -2510,11 +2582,23 @@ function handleSaveTransaction(data, isEdit) {
 }
 
 function handleDeleteTransaction(id) {
-    if (String(id || '').startsWith('auto-savings-')) {
-        alert('זו הפקדת חיסכון אוטומטית שנוצרת מתוך יעד חיסכון. כדי לשנות/לבטל אותה יש לערוך את יעד החיסכון.');
-        return;
-    }
+    const tx = state.transactions.find((t) => String(t.id) === String(id));
+    const linkedGoal = tx && tx.goalId ? state.savingsGoals.find((g) => String(g.id) === String(tx.goalId)) : null;
     if (confirm('האם אתה בטוח שברצונך למחוק תנועה זו?')) {
+        if (tx && tx.type === 'savings_deposit' && tx.isRecurring && linkedGoal) {
+            const cycleKey = getCurrentCycleKey();
+            const skipped = getSkippedCycleSetFromTransaction(tx);
+            skipped.add(cycleKey);
+            const updatedTx = {
+                ...tx,
+                cycleDate: buildSkippedCycleValue(skipped)
+            };
+            state.transactions = state.transactions.map((t) => (String(t.id) === String(tx.id) ? updatedTx : t));
+            saveDataToGAS('updateTransaction', updatedTx);
+            closeModal();
+            render();
+            return;
+        }
         state.transactions = state.transactions.filter(t => t.id !== id);
         saveDataToGAS('deleteTransaction', { id });
         closeModal();
@@ -2703,6 +2787,7 @@ function handleSaveSavings(data, isEdit) {
         state.savingsGoals.push(data);
         saveDataToGAS('addSavingsGoal', data);
     }
+    syncRecurringDepositWithGoal(data, isEdit);
     closeModal();
     render();
 }
@@ -2787,6 +2872,11 @@ function renderExtraDepositModal(goalId) {
 
 function handleDeleteSavings(id) {
     if (confirm('האם אתה בטוח שברצונך למחוק יעד זה?')) {
+        const linkedRecurring = getGoalRecurringDepositTransaction(id);
+        if (linkedRecurring) {
+            state.transactions = state.transactions.filter((t) => String(t.id) !== String(linkedRecurring.id));
+            saveDataToGAS('deleteTransaction', { id: linkedRecurring.id });
+        }
         state.savingsGoals = state.savingsGoals.filter(g => g.id !== id);
         saveDataToGAS('deleteSavingsGoal', { id });
         closeModal();

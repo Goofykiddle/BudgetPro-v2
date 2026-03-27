@@ -829,14 +829,9 @@ function renderHome() {
                 <!-- Content -->
                 <div class="p-3">
                     ${state.activeHomeChart === 'category' ? `
-                        <div class="flex flex-row-reverse gap-3 items-start justify-between">
-                            <!-- Doughnut Chart -->
-                            <div class="w-24 h-24 sm:w-32 sm:h-32 md:w-40 md:h-40 relative shrink-0">
-                                <canvas id="categoryChart"></canvas>
-                            </div>
-
-                            <!-- Category List -->
-                            <div class="flex-1 w-full min-w-0 space-y-2">
+                        <div class="grid grid-cols-2 gap-3 items-center">
+                            <!-- Category List (Left) -->
+                            <div class="space-y-2 min-w-0">
                                 ${(() => {
                                     const currentTransactions = getFilteredTransactions('all');
                                     const expenses = currentTransactions.filter(t => t.type.includes('expense'));
@@ -845,26 +840,31 @@ function renderHome() {
                                         const cat = t.category || 'אחר';
                                         categoryTotals[cat] = (categoryTotals[cat] || 0) + t.amount;
                                     });
-                                    
-                                    // Sort by amount descending and take top 5
+
                                     return Object.entries(categoryTotals)
                                         .sort(([, a], [, b]) => b - a)
                                         .slice(0, 5)
                                         .map(([cat, amount]) => {
                                             const categoryObj = state.categories.find(c => c.name === cat) || { icon: 'category' };
                                             return `
-                                                <div class="flex items-center justify-between">
-                                                    <div class="text-right min-w-0">
-                                                        <p class="font-black text-lg md:text-xl leading-tight">${formatCurrency(amount)}</p>
-                                                        <p class="text-[11px] md:text-xs text-on-surface-variant leading-tight">${cat}</p>
+                                                <div class="text-right">
+                                                    <div class="flex items-center justify-end gap-2 leading-tight">
+                                                        <span class="font-black text-2xl md:text-3xl">${formatCurrency(amount)}</span>
+                                                        <span class="material-symbols-outlined text-base text-primary">${categoryObj.icon}</span>
                                                     </div>
-                                                    <div class="w-7 h-7 rounded-md bg-surface-variant/30 flex items-center justify-center text-primary">
-                                                        <span class="material-symbols-outlined text-sm">${categoryObj.icon}</span>
-                                                    </div>
+                                                    <p class="text-sm md:text-base text-on-surface-variant leading-tight">${cat}</p>
                                                 </div>
                                             `;
                                         }).join('');
                                 })()}
+                            </div>
+
+                            <!-- Doughnut Chart (Right) -->
+                            <div class="w-36 h-36 sm:w-44 sm:h-44 md:w-56 md:h-56 relative shrink-0 justify-self-center">
+                                <canvas id="categoryChart"></canvas>
+                                <div class="absolute inset-0 flex items-center justify-center pointer-events-none">
+                                    <p class="text-xl md:text-3xl leading-tight text-center text-on-surface">עסקאות<br>החודש</p>
+                                </div>
                             </div>
                         </div>
                         <div class="mt-2 text-center">

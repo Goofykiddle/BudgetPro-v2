@@ -1451,6 +1451,14 @@ function generateForecastData() {
         };
     }
 
+    function isRecurringSavingsSkippedForMonth(transaction, monthIndex, year) {
+        if (!transaction || !transaction.isRecurring) return false;
+        const skipped = getSkippedCycleSetFromTransaction(transaction);
+        if (!skipped.size) return false;
+        const cycleKey = `${year}-${String(monthIndex + 1).padStart(2, '0')}`;
+        return skipped.has(cycleKey);
+    }
+
     const canonicalSavings = getCanonicalSavingsTransactions();
 
     for (let i = 0; i < 12; i++) {
@@ -1515,6 +1523,7 @@ function generateForecastData() {
         canonicalSavings.recurringByGoalId.forEach((t, goalId) => {
             const goal = state.savingsGoals.find((g) => String(g.id) === String(goalId));
             if (goal && !goalAppliesForMonth(goal, monthIndex, year)) return;
+            if (isRecurringSavingsSkippedForMonth(t, monthIndex, year)) return;
             if (!appliesByFrequency({ ...t, frequency: t.frequency || 'monthly' }, monthIndex, year)) return;
             savingsItems.push({ name: t.name, amount: t.amount });
             savingsDepositFromTransactions += t.amount;
@@ -1522,6 +1531,7 @@ function generateForecastData() {
 
         canonicalSavings.direct.forEach((t) => {
             if (t.isRecurring) {
+                if (isRecurringSavingsSkippedForMonth(t, monthIndex, year)) return;
                 if (!appliesByFrequency({ ...t, frequency: t.frequency || 'monthly' }, monthIndex, year)) return;
                 savingsItems.push({ name: t.name, amount: t.amount });
                 savingsDepositFromTransactions += t.amount;

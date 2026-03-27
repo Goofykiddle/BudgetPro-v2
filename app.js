@@ -829,15 +829,14 @@ function renderHome() {
                 <!-- Content -->
                 <div class="p-3">
                     ${state.activeHomeChart === 'category' ? `
-                        <div class="flex flex-row-reverse gap-3 md:gap-5 items-start md:items-center">
+                        <div class="flex flex-row-reverse gap-3 items-start justify-between">
                             <!-- Doughnut Chart -->
-                            <div class="w-28 h-28 md:w-40 md:h-40 relative shrink-0 mx-auto">
+                            <div class="w-24 h-24 sm:w-32 sm:h-32 md:w-40 md:h-40 relative shrink-0">
                                 <canvas id="categoryChart"></canvas>
                             </div>
 
                             <!-- Category List -->
-                            <div class="flex-1 w-full space-y-2">
-                                <p class="text-xs md:text-sm font-bold text-on-surface-variant text-right mb-1">עסקאות החודש</p>
+                            <div class="flex-1 w-full min-w-0 space-y-2">
                                 ${(() => {
                                     const currentTransactions = getFilteredTransactions('all');
                                     const expenses = currentTransactions.filter(t => t.type.includes('expense'));
@@ -855,7 +854,7 @@ function renderHome() {
                                             const categoryObj = state.categories.find(c => c.name === cat) || { icon: 'category' };
                                             return `
                                                 <div class="flex items-center justify-between">
-                                                    <div class="text-right">
+                                                    <div class="text-right min-w-0">
                                                         <p class="font-black text-lg md:text-xl leading-tight">${formatCurrency(amount)}</p>
                                                         <p class="text-[11px] md:text-xs text-on-surface-variant leading-tight">${cat}</p>
                                                     </div>
@@ -868,7 +867,7 @@ function renderHome() {
                                 })()}
                             </div>
                         </div>
-                        <div class="mt-3 text-center">
+                        <div class="mt-2 text-center">
                             <button onclick="navigate('/transactions')" class="text-cyan-500 font-black text-xl flex items-center justify-center gap-1 mx-auto">
                                 לכל הקטגוריות >
                             </button>

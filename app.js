@@ -290,7 +290,27 @@ function getFilteredTransactions(filterType, date = new Date()) {
         });
     });
 
-    let allTransactions = baseFiltered;
+    // Guard against legacy duplicate recurring savings rows for the same goal.
+    // Keep only the latest occurrence per goal in the current filtered set.
+    const dedupedFromEnd = [];
+    const seenRecurringSavingsGoal = new Set();
+    for (let i = baseFiltered.length - 1; i >= 0; i--) {
+        const t = baseFiltered[i];
+        const isGoalRecurringSavings = !!(
+            t &&
+            t.type === 'savings_deposit' &&
+            t.isRecurring &&
+            String(t.goalId || '').trim()
+        );
+        if (isGoalRecurringSavings) {
+            const key = String(t.goalId).trim();
+            if (seenRecurringSavingsGoal.has(key)) continue;
+            seenRecurringSavingsGoal.add(key);
+        }
+        dedupedFromEnd.push(t);
+    }
+
+    let allTransactions = dedupedFromEnd.reverse();
 
     if (filterType === 'income') {
         allTransactions = allTransactions.filter(t => t.type === 'fixed_income' || t.type === 'variable_income');
@@ -1397,6 +1417,42 @@ function generateForecastData() {
         return true;
     }
 
+    function goalAppliesForMonth(goal, monthIndex, year) {
+        const monthly = Number(goal?.monthlyAmount) || 0;
+        if (monthly <= 0) return false;
+        const startDate = new Date(goal?.startDate || `${year}-${String(monthIndex + 1).padStart(2, '0')}-01`);
+        const monthsPassed = (year - startDate.getFullYear()) * 12 + (monthIndex - startDate.getMonth());
+        if (monthsPassed < 0) return false;
+        const effectiveDuration = getGoalRemainingMonths(goal);
+        return monthsPassed < effectiveDuration;
+    }
+
+    function getCanonicalSavingsTransactions() {
+        const recurringByGoalId = new Map();
+        const direct = [];
+
+        state.transactions.forEach((t) => {
+            if (!t || t.type !== 'savings_deposit') return;
+            if (Number(t.amount) <= 0) return;
+
+            const goalId = String(t.goalId || '').trim();
+            if (t.isRecurring && goalId) {
+                // Keep latest occurrence for each goal (legacy duplicate safety).
+                recurringByGoalId.set(goalId, t);
+                return;
+            }
+
+            direct.push(t);
+        });
+
+        return {
+            direct,
+            recurringByGoalId
+        };
+    }
+
+    const canonicalSavings = getCanonicalSavingsTransactions();
+
     for (let i = 0; i < 12; i++) {
         const forecastDate = new Date(startYear, startMonth + i, 1);
         const monthIndex = forecastDate.getMonth();
@@ -1449,33 +1505,47 @@ function generateForecastData() {
             }, 0);
             
         const savingsItems = [];
-        const savingsDepositFromGoals = state.savingsGoals.reduce((sum, goal) => {
-            const startDate = new Date(goal.startDate || '2026-01-01');
-            const monthsPassed = (year - startDate.getFullYear()) * 12 + (monthIndex - startDate.getMonth());
-            const effectiveDuration = getGoalRemainingMonths(goal);
-            
-            if (monthsPassed >= 0 && monthsPassed < effectiveDuration) {
-                savingsItems.push({ name: goal.name, amount: goal.monthlyAmount || 0 });
-                return sum + (goal.monthlyAmount || 0);
-            }
-            return sum;
-        }, 0);
 
-        const savingsDepositFromTransactions = state.transactions
-            .filter(t => t.type === 'savings_deposit')
-            .reduce((sum, t) => {
-                if (t.isRecurring || t.type === 'savings_deposit') {
-                    if (t.isRecurring ? appliesByFrequency({ ...t, frequency: t.frequency || 'monthly' }, monthIndex, year) : true) {
-                        const tDate = new Date(t.date);
-                        const exactMonth = tDate.getMonth() === monthIndex && tDate.getFullYear() === year;
-                        if (t.isRecurring || exactMonth) {
-                            savingsItems.push({ name: t.name, amount: t.amount });
-                            return sum + t.amount;
-                        }
-                    }
-                }
-                return sum;
-            }, 0);
+        // Source of truth:
+        // 1) recurring savings transactions linked to goals (canonical, deduped by goalId)
+        // 2) direct savings transactions (one-time or recurring without goalId)
+        // 3) fallback to goal.monthlyAmount only when no recurring tx exists for that goal
+        let savingsDepositFromTransactions = 0;
+
+        canonicalSavings.recurringByGoalId.forEach((t, goalId) => {
+            const goal = state.savingsGoals.find((g) => String(g.id) === String(goalId));
+            if (goal && !goalAppliesForMonth(goal, monthIndex, year)) return;
+            if (!appliesByFrequency({ ...t, frequency: t.frequency || 'monthly' }, monthIndex, year)) return;
+            savingsItems.push({ name: t.name, amount: t.amount });
+            savingsDepositFromTransactions += t.amount;
+        });
+
+        canonicalSavings.direct.forEach((t) => {
+            if (t.isRecurring) {
+                if (!appliesByFrequency({ ...t, frequency: t.frequency || 'monthly' }, monthIndex, year)) return;
+                savingsItems.push({ name: t.name, amount: t.amount });
+                savingsDepositFromTransactions += t.amount;
+                return;
+            }
+
+            const tDate = new Date(t.date);
+            const exactMonth = tDate.getMonth() === monthIndex && tDate.getFullYear() === year;
+            if (!exactMonth) return;
+            savingsItems.push({ name: t.name, amount: t.amount });
+            savingsDepositFromTransactions += t.amount;
+        });
+
+        const savingsDepositFromGoalsFallback = state.savingsGoals.reduce((sum, goal) => {
+            const gid = String(goal.id || '').trim();
+            if (!gid) return sum;
+            if (canonicalSavings.recurringByGoalId.has(gid)) return sum;
+            if (!goalAppliesForMonth(goal, monthIndex, year)) return sum;
+
+            const monthly = Number(goal.monthlyAmount) || 0;
+            if (monthly <= 0) return sum;
+            savingsItems.push({ name: `הפקדה: ${goal.name}`, amount: monthly });
+            return sum + monthly;
+        }, 0);
 
         if (i === 0) {
             if (existingSavingsFromAccounts > 0) {
@@ -1488,7 +1558,7 @@ function generateForecastData() {
         
         const incomeTotal = fixedIncome + variableIncome;
         const expenseTotal = fixedExpenses + variableExpenses;
-        const savingsDeposit = savingsDepositFromGoals + savingsDepositFromTransactions;
+        const savingsDeposit = savingsDepositFromTransactions + savingsDepositFromGoalsFallback;
         const monthlyNet = incomeTotal - expenseTotal - savingsDeposit;
         const openingChecking = currentChecking;
         const openingSavings = currentSavings;

@@ -728,7 +728,7 @@ function renderHome() {
                     </div>
                     <span class="text-xs font-semibold">הוצאה</span>
                 </button>
-                <button onclick="renderSavingsModal()" class="flex flex-col items-center gap-2 p-3 rounded-2xl bg-surface-variant/30 hover:bg-surface-variant/50 transition-colors">
+                <button onclick="renderSavingsActionModal()" class="flex flex-col items-center gap-2 p-3 rounded-2xl bg-surface-variant/30 hover:bg-surface-variant/50 transition-colors">
                     <div class="w-12 h-12 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center">
                         <span class="material-symbols-outlined">savings</span>
                     </div>
@@ -939,7 +939,7 @@ function renderTransactions() {
                     </div>
                     <span class="text-xs font-semibold">הוצאה</span>
                 </button>
-                <button onclick="renderSavingsModal()" class="flex flex-col items-center gap-2 p-3 rounded-2xl bg-surface-variant/30 hover:bg-surface-variant/50 transition-colors">
+                <button onclick="renderSavingsActionModal()" class="flex flex-col items-center gap-2 p-3 rounded-2xl bg-surface-variant/30 hover:bg-surface-variant/50 transition-colors">
                     <div class="w-12 h-12 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center">
                         <span class="material-symbols-outlined">savings</span>
                     </div>
@@ -2671,6 +2671,89 @@ function handleSaveCategory(category) {
     saveDataToGAS('addCategory', category);
     closeModal();
     render();
+}
+
+function renderSavingsActionModal() {
+    const hasGoals = state.savingsGoals.length > 0;
+
+    const html = `
+        <div class="space-y-6">
+            <div class="flex items-center justify-between mb-2">
+                <h2 class="text-2xl font-black text-primary">פעולת חיסכון</h2>
+                <button onclick="closeModal()" class="w-10 h-10 flex items-center justify-center rounded-full hover:bg-surface-variant/50">
+                    <span class="material-symbols-outlined">close</span>
+                </button>
+            </div>
+
+            <button type="button" onclick="handleSavingsActionSelect('new')" class="w-full p-4 rounded-2xl border border-surface-variant/40 bg-white hover:bg-surface-variant/10 transition-all text-right">
+                <p class="text-lg font-black text-on-surface">יצירת יעד חיסכון חדש</p>
+                <p class="text-sm text-on-surface-variant mt-1">הגדרת יעד, תאריך התחלה והפקדה חודשית</p>
+            </button>
+
+            <button type="button" onclick="handleSavingsActionSelect('extra')" class="w-full p-4 rounded-2xl border border-surface-variant/40 ${hasGoals ? 'bg-white hover:bg-surface-variant/10' : 'bg-surface-variant/20 opacity-60 cursor-not-allowed'} transition-all text-right" ${hasGoals ? '' : 'disabled'}>
+                <p class="text-lg font-black text-on-surface">הפקדה נוספת לחיסכון קיים</p>
+                <p class="text-sm text-on-surface-variant mt-1">${hasGoals ? 'בחירת יעד קיים ועדכון ההפקדה של החודש' : 'אין עדיין יעדי חיסכון קיימים'}</p>
+            </button>
+        </div>
+    `;
+
+    openModal(html);
+}
+
+function handleSavingsActionSelect(mode) {
+    if (mode === 'new') {
+        renderSavingsModal();
+        return;
+    }
+
+    if (!state.savingsGoals.length) {
+        alert('לא קיימים עדיין יעדי חיסכון. בוא ניצור יעד חדש קודם.');
+        renderSavingsModal();
+        return;
+    }
+
+    renderSavingsGoalPickerModal();
+}
+
+function renderSavingsGoalPickerModal() {
+    const goals = [...state.savingsGoals]
+        .sort((a, b) => (Number(b.current) || 0) - (Number(a.current) || 0));
+
+    if (!goals.length) {
+        renderSavingsModal();
+        return;
+    }
+
+    const html = `
+        <div class="space-y-6">
+            <div class="flex items-center justify-between mb-2">
+                <h2 class="text-2xl font-black text-primary">בחירת חיסכון להפקדה</h2>
+                <button onclick="closeModal()" class="w-10 h-10 flex items-center justify-center rounded-full hover:bg-surface-variant/50">
+                    <span class="material-symbols-outlined">close</span>
+                </button>
+            </div>
+
+            <div class="space-y-3 max-h-[52vh] overflow-y-auto no-scrollbar pr-1">
+                ${goals.map((goal) => `
+                    <button type="button" onclick="renderExtraDepositModal('${goal.id}')" class="w-full p-4 rounded-2xl border border-surface-variant/40 bg-white hover:bg-surface-variant/10 transition-all text-right">
+                        <div class="flex items-center justify-between gap-3">
+                            <span class="material-symbols-outlined ${goal.color.replace('bg-', 'text-')}">savings</span>
+                            <div class="min-w-0">
+                                <p class="font-black text-lg truncate">${goal.name}</p>
+                                <p class="text-sm text-on-surface-variant">נוכחי: ${formatCurrency(goal.current || 0)} • יעד: ${formatCurrency(goal.target || 0)}</p>
+                            </div>
+                        </div>
+                    </button>
+                `).join('')}
+            </div>
+
+            <button type="button" onclick="renderSavingsActionModal()" class="w-full h-12 rounded-2xl bg-surface-variant/20 text-on-surface font-bold">
+                חזרה
+            </button>
+        </div>
+    `;
+
+    openModal(html);
 }
 
 function renderSavingsModal(goal = null) {

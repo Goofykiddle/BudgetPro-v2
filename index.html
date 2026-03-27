@@ -74,6 +74,78 @@
         .page-transition {
             transition: opacity 0.2s ease-in-out;
         }
+
+        /* Home Category Chart (MAX-like layout) */
+        .home-cat-wrap {
+            display: grid;
+            grid-template-columns: minmax(0, 1fr) 44%;
+            gap: 10px;
+            align-items: center;
+            direction: rtl;
+        }
+        .home-cat-list {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            min-width: 0;
+        }
+        .home-cat-item {
+            display: flex;
+            flex-direction: column;
+            align-items: flex-end;
+            min-height: 44px;
+        }
+        .home-cat-amount-row {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            line-height: 1.05;
+        }
+        .home-cat-amount {
+            font-size: 1.9rem;
+            font-weight: 800;
+            white-space: nowrap;
+        }
+        .home-cat-name {
+            font-size: 1.05rem;
+            color: #5f5b66;
+            line-height: 1.1;
+            margin-top: 2px;
+            white-space: nowrap;
+        }
+        .home-cat-icon {
+            font-size: 1.1rem;
+            color: #6750A4;
+        }
+        .home-cat-donut-col {
+            display: flex;
+            justify-content: center;
+        }
+        .home-cat-donut-box {
+            width: 160px;
+            height: 160px;
+            position: relative;
+            flex-shrink: 0;
+        }
+        .home-cat-donut-label {
+            position: absolute;
+            inset: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            pointer-events: none;
+            text-align: center;
+            line-height: 1.1;
+            font-size: 1.3rem;
+            color: #1C1B1F;
+        }
+        @media (min-width: 768px) {
+            .home-cat-wrap { grid-template-columns: minmax(0, 1fr) 46%; }
+            .home-cat-donut-box { width: 220px; height: 220px; }
+            .home-cat-amount { font-size: 2.2rem; }
+            .home-cat-name { font-size: 1.35rem; }
+            .home-cat-donut-label { font-size: 2rem; }
+        }
     </style>
 </head>
 <body class="bg-background text-on-surface min-h-screen">

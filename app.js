@@ -829,9 +829,9 @@ function renderHome() {
                 <!-- Content -->
                 <div class="p-3">
                     ${state.activeHomeChart === 'category' ? `
-                        <div class="grid grid-cols-[minmax(0,1fr)_128px] sm:grid-cols-[minmax(0,1fr)_160px] md:grid-cols-[minmax(0,1fr)_208px] gap-2 items-center overflow-hidden" dir="ltr">
+                        <div class="home-cat-wrap">
                             <!-- Category List (Left) -->
-                            <div class="space-y-2 min-w-0" dir="rtl">
+                            <div class="home-cat-list">
                                 ${(() => {
                                     const currentTransactions = getFilteredTransactions('all');
                                     const expenses = currentTransactions.filter(t => t.type.includes('expense'));
@@ -847,12 +847,12 @@ function renderHome() {
                                         .map(([cat, amount]) => {
                                             const categoryObj = state.categories.find(c => c.name === cat) || { icon: 'category' };
                                             return `
-                                                <div class="text-right">
-                                                    <div class="flex items-center justify-end gap-2 leading-tight">
-                                                        <span class="font-black text-lg md:text-xl">${formatCurrency(amount)}</span>
-                                                        <span class="material-symbols-outlined text-sm text-primary">${categoryObj.icon}</span>
+                                                <div class="home-cat-item">
+                                                    <div class="home-cat-amount-row">
+                                                        <span class="home-cat-amount">${formatCurrency(amount)}</span>
+                                                        <span class="material-symbols-outlined home-cat-icon">${categoryObj.icon}</span>
                                                     </div>
-                                                    <p class="text-xs md:text-sm text-on-surface-variant leading-tight">${cat}</p>
+                                                    <p class="home-cat-name">${cat}</p>
                                                 </div>
                                             `;
                                         }).join('');
@@ -860,11 +860,13 @@ function renderHome() {
                             </div>
 
                             <!-- Doughnut Chart (Right) -->
-                            <div class="w-[128px] h-[128px] sm:w-[160px] sm:h-[160px] md:w-[208px] md:h-[208px] relative shrink-0 justify-self-center" dir="rtl">
+                            <div class="home-cat-donut-col">
+                                <div class="home-cat-donut-box">
                                     <canvas id="categoryChart"></canvas>
-                                    <div class="absolute inset-0 flex items-center justify-center pointer-events-none">
-                                        <p class="text-base md:text-2xl leading-tight text-center text-on-surface">עסקאות<br>החודש</p>
+                                    <div class="home-cat-donut-label">
+                                        <p>עסקאות<br>החודש</p>
                                     </div>
+                                </div>
                             </div>
                         </div>
                         <div class="mt-2 text-center">

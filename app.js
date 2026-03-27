@@ -745,7 +745,7 @@ function renderHome() {
             <!-- Savings Goals -->
             <section>
                 <div class="flex items-center justify-between mb-4">
-                    <h3 class="text-lg font-bold">החסכונות שלי</h3>
+                    <h3 class="text-2xl font-bold">החסכונות שלי</h3>
                     <button onclick="navigate('/savings')" class="text-sm text-primary font-medium">נהל הכל</button>
                 </div>
                 <div class="flex gap-4 overflow-x-auto no-scrollbar pb-2 -mx-4 px-4">
@@ -760,8 +760,8 @@ function renderHome() {
                                 <span class="text-[10px] font-bold ${goal.onContainer} opacity-60">${Math.round(progress)}%</span>
                             </div>
                             <div>
-                                <h4 class="font-bold text-sm ${goal.onContainer}">${goal.name}</h4>
-                                <p class="text-xs ${goal.onContainer} opacity-70">${formatCurrency(goal.current)} מתוך ${formatCurrency(goal.target)}</p>
+                                <h4 class="font-bold text-base ${goal.onContainer}">${goal.name}</h4>
+                                <p class="text-sm ${goal.onContainer} opacity-75">${formatCurrency(goal.current)} מתוך ${formatCurrency(goal.target)}</p>
                             </div>
                             <div class="w-full h-2 bg-white/50 rounded-full overflow-hidden">
                                 <div class="h-full ${goal.color}" style="width: ${progress}%"></div>
@@ -775,7 +775,7 @@ function renderHome() {
             <!-- Recent Transactions -->
             <section>
                 <div class="flex items-center justify-between mb-4">
-                    <h3 class="text-lg font-bold">תנועות אחרונות</h3>
+                    <h3 class="text-2xl font-bold">תנועות אחרונות</h3>
                     <button onclick="navigate('/transactions')" class="text-sm text-primary font-bold hover:underline">נהל הכל</button>
                 </div>
                 <div class="flex gap-3 overflow-x-auto no-scrollbar pb-2 -mx-4 px-4">
@@ -795,11 +795,11 @@ function renderHome() {
                                         <div class="w-8 h-8 rounded-full ${colorClass} flex items-center justify-center">
                                             <span class="material-symbols-outlined text-sm">${TRANSACTION_TYPES[t.type]?.icon || 'receipt_long'}</span>
                                         </div>
-                                        <span class="text-[9px] text-on-surface-variant font-medium">${t.date.split('-').slice(1).reverse().join('/')}</span>
+                                        <span class="text-xs text-on-surface-variant font-medium">${t.date.split('-').slice(1).reverse().join('/')}</span>
                                     </div>
                                     <div>
-                                        <h4 class="font-bold text-xs truncate">${t.name}</h4>
-                                        <p class="text-[9px] text-on-surface-variant truncate">${t.category || 'ללא קטגוריה'}</p>
+                                        <h4 class="font-bold text-sm truncate">${t.name}</h4>
+                                        <p class="text-xs text-on-surface-variant truncate">${t.category || 'ללא קטגוריה'}</p>
                                     </div>
                                     <p class="font-bold text-sm ${isExpense ? 'text-rose-600' : 'text-emerald-600'}">${amountSign}${formatCurrency(t.amount)}</p>
                                 </div>
@@ -815,13 +815,13 @@ function renderHome() {
                 <div class="flex border-b border-surface-variant/30">
                     <button onclick="switchHomeChart('trend')" class="flex-1 py-3 flex items-center justify-center gap-2 transition-colors ${state.activeHomeChart === 'trend' ? 'bg-white text-on-surface' : 'bg-surface-variant/20 text-on-surface-variant'}">
                         <span class="material-symbols-outlined text-lg">bar_chart</span>
-                        <span class="font-bold text-xs">גרף חודשים</span>
+                        <span class="font-bold text-sm">גרף חודשים</span>
                         <span class="material-symbols-outlined text-base">${state.activeHomeChart === 'trend' ? 'keyboard_arrow_up' : 'keyboard_arrow_down'}</span>
                     </button>
                     <div class="w-[1px] bg-surface-variant/30"></div>
                     <button onclick="switchHomeChart('category')" class="flex-1 py-3 flex items-center justify-center gap-2 transition-colors ${state.activeHomeChart === 'category' ? 'bg-white text-on-surface' : 'bg-surface-variant/20 text-on-surface-variant'}">
                         <span class="material-symbols-outlined text-lg">donut_large</span>
-                        <span class="font-bold text-xs">גרף קטגוריות</span>
+                        <span class="font-bold text-sm">גרף קטגוריות</span>
                         <span class="material-symbols-outlined text-base">${state.activeHomeChart === 'category' ? 'keyboard_arrow_up' : 'keyboard_arrow_down'}</span>
                     </button>
                 </div>
@@ -859,7 +859,7 @@ function renderHome() {
                                                 <div class="flex items-center justify-between">
                                                     <div class="text-right">
                                                         <p class="font-black text-xl leading-tight">${formatCurrency(amount)}</p>
-                                                        <p class="text-[9px] text-on-surface-variant leading-tight">${cat}</p>
+                                                        <p class="text-xs text-on-surface-variant leading-tight">${cat}</p>
                                                     </div>
                                                     <div class="w-7 h-7 rounded-md bg-surface-variant/30 flex items-center justify-center text-primary">
                                                         <span class="material-symbols-outlined text-sm">${categoryObj.icon}</span>
@@ -956,8 +956,8 @@ function renderTransactions() {
 
             <!-- Actions Title -->
             <div class="px-2">
-                <h3 class="text-xl font-bold mb-1">פעולות במחזור החודשי</h3>
-                <p class="text-on-surface-variant text-sm">ניהול ומעקב אחר כל התנועות הכספיות שלך.</p>
+                <h3 class="text-2xl font-bold mb-1">פעולות במחזור החודשי</h3>
+                <p class="text-on-surface-variant text-base">ניהול ומעקב אחר כל התנועות הכספיות שלך.</p>
             </div>
 
             <!-- Categories -->
@@ -974,7 +974,7 @@ function renderTransactions() {
             <!-- Filter Navigation -->
             <div class="flex bg-surface-variant/20 p-1.5 rounded-2xl">
                 ${['all', 'fixed', 'variable', 'income', 'expense'].map(f => `
-                    <button onclick="updateTransactionFilter('filter', '${f}')" class="flex-1 py-2.5 rounded-xl text-sm font-bold transition-all ${filterType === f ? 'bg-white text-primary shadow-sm' : 'text-on-surface-variant'}">
+                    <button onclick="updateTransactionFilter('filter', '${f}')" class="flex-1 py-2.5 rounded-xl text-base font-bold transition-all ${filterType === f ? 'bg-white text-primary shadow-sm' : 'text-on-surface-variant'}">
                         ${f === 'all' ? 'הכל' : f === 'fixed' ? 'קבועות' : f === 'variable' ? 'משתנות' : f === 'income' ? 'הכנסות' : 'הוצאות'}
                     </button>
                 `).join('')}
@@ -991,9 +991,9 @@ function renderTransactions() {
                             <div>
                                 <p class="font-extrabold text-on-surface">${t.name}</p>
                                 <div class="flex items-center gap-2">
-                                    <span class="text-[10px] font-bold text-on-surface-variant uppercase opacity-60">${t.category || 'כללי'}</span>
+                                    <span class="text-xs font-bold text-on-surface-variant uppercase opacity-70">${t.category || 'כללי'}</span>
                                     <span class="w-1 h-1 bg-surface-variant rounded-full"></span>
-                                    <span class="text-[10px] font-bold text-on-surface-variant opacity-60">${t.date}</span>
+                                    <span class="text-xs font-bold text-on-surface-variant opacity-70">${t.date}</span>
                                 </div>
                             </div>
                         </div>

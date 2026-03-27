@@ -2065,17 +2065,31 @@ function renderOnboarding() {
 function applyBootstrapData(result) {
     const applyStart = perfNow();
     if (!result || !result.ok) return false;
+    const hasStateShape = (
+        Object.prototype.hasOwnProperty.call(result, 'transactions') ||
+        Object.prototype.hasOwnProperty.call(result, 'savingsGoals') ||
+        Object.prototype.hasOwnProperty.call(result, 'accountBalances') ||
+        Object.prototype.hasOwnProperty.call(result, 'categories') ||
+        Object.prototype.hasOwnProperty.call(result, 'settings')
+    );
+    if (!hasStateShape) return false;
 
-    state.transactions = (result.transactions || []).map((t) => {
-        if (!t || typeof t !== 'object') return t;
-        const isFixedExpense = t.type === 'fixed_expense';
-        return {
-            ...t,
-            frequency: isFixedExpense && !FREQUENCIES[t.frequency] ? 'monthly' : t.frequency
-        };
-    });
-    state.savingsGoals = result.savingsGoals || [];
-    state.accountBalances = result.accountBalances || [];
+    if (Object.prototype.hasOwnProperty.call(result, 'transactions')) {
+        state.transactions = (result.transactions || []).map((t) => {
+            if (!t || typeof t !== 'object') return t;
+            const isFixedExpense = t.type === 'fixed_expense';
+            return {
+                ...t,
+                frequency: isFixedExpense && !FREQUENCIES[t.frequency] ? 'monthly' : t.frequency
+            };
+        });
+    }
+    if (Object.prototype.hasOwnProperty.call(result, 'savingsGoals')) {
+        state.savingsGoals = result.savingsGoals || [];
+    }
+    if (Object.prototype.hasOwnProperty.call(result, 'accountBalances')) {
+        state.accountBalances = result.accountBalances || [];
+    }
     if (result.categories) {
         state.categories = result.categories.map(cat => {
             if (typeof cat === 'string') return { name: cat, icon: 'category' };
@@ -2129,8 +2143,9 @@ function applyActionResultLocally(action, result, payload) {
         return true;
     }
 
-    if (action === 'deleteTransaction' && result.deletedId) {
-        state.transactions = state.transactions.filter((t) => String(t.id) !== String(result.deletedId));
+    if (action === 'deleteTransaction' && (result.deletedId || (payload && payload.id))) {
+        const targetId = result.deletedId || payload.id;
+        state.transactions = state.transactions.filter((t) => String(t.id) !== String(targetId));
         return true;
     }
 
@@ -2264,6 +2279,9 @@ async function saveDataToGAS(action, data, options = {}) {
                 ok: !!(result && result.ok),
                 keys: result ? Object.keys(result) : []
             });
+            if (action === 'deleteTransaction') {
+                console.log('[DEBUG] deleteTransaction payload/result', { payload: data, result });
+            }
             if (applyActionResultLocally(action, result, data)) {
                 render();
             } else {
@@ -2492,6 +2510,10 @@ function handleSaveTransaction(data, isEdit) {
 }
 
 function handleDeleteTransaction(id) {
+    if (String(id || '').startsWith('auto-savings-')) {
+        alert('זו הפקדת חיסכון אוטומטית שנוצרת מתוך יעד חיסכון. כדי לשנות/לבטל אותה יש לערוך את יעד החיסכון.');
+        return;
+    }
     if (confirm('האם אתה בטוח שברצונך למחוק תנועה זו?')) {
         state.transactions = state.transactions.filter(t => t.id !== id);
         saveDataToGAS('deleteTransaction', { id });

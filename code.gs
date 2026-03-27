@@ -23,7 +23,10 @@ const APP = {
       'goalId',
       'cycleDate',
       'isVariablePrice',
-      'lastMonthAmount'
+      'lastMonthAmount',
+      'isInstallments',
+      'installmentsTotal',
+      'installmentsStartDate'
     ],
     SAVINGS_GOALS: [
       'id',
@@ -505,7 +508,10 @@ function normalizeTransactionRow_(row) {
     goalId: normalizeNullableString_(row.goalId),
     cycleDate: normalizeNullableString_(row.cycleDate),
     isVariablePrice: toBool_(row.isVariablePrice),
-    lastMonthAmount: toNumber_(row.lastMonthAmount)
+    lastMonthAmount: toNumber_(row.lastMonthAmount),
+    isInstallments: toBool_(row.isInstallments),
+    installmentsTotal: normalizeNullableInteger_(row.installmentsTotal),
+    installmentsStartDate: normalizeNullableDateOnly_(row.installmentsStartDate)
   };
 }
 

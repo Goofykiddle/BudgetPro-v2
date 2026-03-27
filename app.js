@@ -203,6 +203,38 @@ function parseDateLocal(dateStr) {
     return new Date(year, month - 1, day);
 }
 
+function normalizeInstallmentsTotal(value) {
+    const n = Math.round(Number(value) || 0);
+    return n > 1 ? n : 0;
+}
+
+function getInstallmentStatus(transaction, monthIndex, year) {
+    const total = normalizeInstallmentsTotal(transaction?.installmentsTotal);
+    const enabled = !!(transaction && transaction.isInstallments && total > 0);
+    if (!enabled) {
+        return { enabled: false, active: false, index: 0, total: 0, startDate: null };
+    }
+
+    const startDate = parseDateLocal(transaction.installmentsStartDate || transaction.date);
+    const monthsDiff = (year - startDate.getFullYear()) * 12 + (monthIndex - startDate.getMonth());
+    const index = monthsDiff + 1;
+    const active = monthsDiff >= 0 && monthsDiff < total;
+
+    return { enabled: true, active, index, total, startDate };
+}
+
+function getInstallmentBadgeText(transaction, monthIndex, year) {
+    const status = getInstallmentStatus(transaction, monthIndex, year);
+    if (!status.enabled || !status.active) return '';
+    return `${status.index}/${status.total}`;
+}
+
+function formatTransactionNameWithInstallment(transaction, monthIndex, year) {
+    const badge = getInstallmentBadgeText(transaction, monthIndex, year);
+    if (!badge) return String(transaction?.name || '');
+    return `${String(transaction?.name || '')} (${badge})`;
+}
+
 function getGoalRemainingMonths(goal) {
     const target = Number(goal?.target) || 0;
     const current = Number(goal?.current) || 0;
@@ -269,6 +301,20 @@ function getFilteredTransactions(filterType, date = new Date()) {
     state.transactions.forEach((t) => {
         if (!t) return;
         if (t.type === 'savings_deposit' && t.amount === 0 && t.goalId) return;
+
+        const installmentStatus = getInstallmentStatus(t, cycleMonth, cycleYear);
+        if (installmentStatus.enabled) {
+            if (!installmentStatus.active) return;
+            baseFiltered.push({
+                ...t,
+                isRecurring: true,
+                frequency: 'monthly',
+                date: toCycleDate(t.installmentsStartDate || t.date),
+                installmentCurrent: installmentStatus.index,
+                installmentTotal: installmentStatus.total
+            });
+            return;
+        }
 
         const tDate = parseDateLocal(t.date);
         const inRange = tDate >= start && tDate < end;
@@ -521,9 +567,16 @@ function checkVariableExpenseReminders() {
     const today = new Date();
     const todayDay = today.getDate();
     const yearMonth = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`;
+    const cycleStart = getCycleDates(today).start;
+    const cycleMonth = cycleStart.getMonth();
+    const cycleYear = cycleStart.getFullYear();
 
     const due = state.transactions
         .filter((t) => t && t.type === 'variable_expense' && t.isRecurring && t.alert && t.date)
+        .filter((t) => {
+            const installmentStatus = getInstallmentStatus(t, cycleMonth, cycleYear);
+            return !installmentStatus.enabled || installmentStatus.active;
+        })
         .filter((t) => {
             const d = parseDateLocal(t.date);
             return d.getDate() === todayDay;
@@ -808,6 +861,9 @@ function renderHome() {
                             const isExpense = t.type.includes('expense') || t.type === 'savings_deposit';
                             const colorClass = isExpense ? 'bg-rose-50 text-rose-600' : 'bg-emerald-50 text-emerald-600';
                             const amountSign = isExpense ? '-' : '';
+                            const tDate = parseDateLocal(t.date);
+                            const installmentBadge = getInstallmentBadgeText(t, tDate.getMonth(), tDate.getFullYear());
+                            const displayName = installmentBadge ? `${t.name} (${installmentBadge})` : t.name;
                             
                             return `
                                 <div onclick="renderTransactionModal(${JSON.stringify(t).replace(/"/g, '&quot;')})" class="min-w-[150px] bg-white rounded-2xl p-3 border border-surface-variant/30 shadow-sm flex flex-col gap-2 cursor-pointer hover:scale-[1.02] transition-transform">
@@ -818,7 +874,7 @@ function renderHome() {
                                         <span class="text-xs text-on-surface-variant font-medium">${t.date.split('-').slice(1).reverse().join('/')}</span>
                                     </div>
                                     <div>
-                                        <h4 class="font-bold text-sm truncate">${t.name}</h4>
+                                        <h4 class="font-bold text-sm truncate">${displayName}</h4>
                                         <p class="text-xs text-on-surface-variant truncate">${t.category || 'ללא קטגוריה'}</p>
                                     </div>
                                     <p class="font-bold text-sm ${isExpense ? 'text-rose-600' : 'text-emerald-600'}">${amountSign}${formatCurrency(t.amount)}</p>
@@ -1001,14 +1057,18 @@ function renderTransactions() {
 
             <!-- Transaction List -->
             <div class="space-y-4">
-                ${categoryFiltered.length > 0 ? categoryFiltered.sort((a, b) => new Date(b.date) - new Date(a.date)).map(t => `
+                ${categoryFiltered.length > 0 ? categoryFiltered.sort((a, b) => new Date(b.date) - new Date(a.date)).map(t => {
+                    const tDate = parseDateLocal(t.date);
+                    const installmentBadge = getInstallmentBadgeText(t, tDate.getMonth(), tDate.getFullYear());
+                    const displayName = installmentBadge ? `${t.name} (${installmentBadge})` : t.name;
+                    return `
                     <div onclick="renderTransactionModal(${JSON.stringify(t).replace(/"/g, '&quot;')})" class="bg-white p-5 rounded-3xl flex items-center justify-between shadow-sm border border-surface-variant/10 active:scale-[0.98] transition-all cursor-pointer">
                         <div class="flex items-center gap-4">
                             <div class="w-12 h-12 rounded-2xl ${TRANSACTION_TYPES[t.type].color.replace('text', 'bg')}/10 flex items-center justify-center ${TRANSACTION_TYPES[t.type].color}">
                                 <span class="material-symbols-outlined text-2xl">${TRANSACTION_TYPES[t.type].icon}</span>
                             </div>
                             <div>
-                                <p class="font-extrabold text-on-surface">${t.name}</p>
+                                <p class="font-extrabold text-on-surface">${displayName}</p>
                                 <div class="flex items-center gap-2">
                                     <span class="text-xs font-bold text-on-surface-variant uppercase opacity-70">${t.category || 'כללי'}</span>
                                     <span class="w-1 h-1 bg-surface-variant rounded-full"></span>
@@ -1020,10 +1080,12 @@ function renderTransactions() {
                             <p class="font-black text-lg ${t.type === 'savings_deposit' ? 'text-blue-600' : (t.type.includes('income') ? 'text-emerald-600' : 'text-rose-600')}">
                                 ${t.type.includes('income') ? '' : '-'}${formatCurrency(t.amount)}
                             </p>
-                            ${t.isRecurring ? '<span class="text-[8px] font-bold bg-surface-variant/30 px-1.5 py-0.5 rounded-full uppercase tracking-tighter">קבוע</span>' : ''}
+                            ${t.isInstallments && installmentBadge
+                                ? `<span class="text-[8px] font-bold bg-blue-50 text-blue-700 px-1.5 py-0.5 rounded-full uppercase tracking-tighter">תשלומים ${installmentBadge}</span>`
+                                : (t.isRecurring ? '<span class="text-[8px] font-bold bg-surface-variant/30 px-1.5 py-0.5 rounded-full uppercase tracking-tighter">קבוע</span>' : '')}
                         </div>
                     </div>
-                `).join('') : `
+                `;}).join('') : `
                     <div class="text-center py-20 opacity-40">
                         <span class="material-symbols-outlined text-6xl mb-4">history</span>
                         <p class="font-bold">אין תנועות להצגה</p>
@@ -1417,6 +1479,18 @@ function generateForecastData() {
         return true;
     }
 
+    function transactionAppliesForMonth(transaction, monthIndex, year) {
+        const installmentStatus = getInstallmentStatus(transaction, monthIndex, year);
+        if (installmentStatus.enabled) return installmentStatus.active;
+
+        if (transaction.isRecurring) {
+            return appliesByFrequency(transaction, monthIndex, year);
+        }
+
+        const tDate = new Date(transaction.date);
+        return tDate.getMonth() === monthIndex && tDate.getFullYear() === year;
+    }
+
     function goalAppliesForMonth(goal, monthIndex, year) {
         const monthly = Number(goal?.monthlyAmount) || 0;
         if (monthly <= 0) return false;
@@ -1493,8 +1567,12 @@ function generateForecastData() {
         const fixedExpenses = state.transactions
             .filter(t => t.type === 'fixed_expense')
             .reduce((sum, t) => {
-                if (appliesByFrequency(t, monthIndex, year)) {
-                    expenseItems.push({ name: t.name, amount: t.amount, date: t.date });
+                if (transactionAppliesForMonth(t, monthIndex, year)) {
+                    expenseItems.push({
+                        name: formatTransactionNameWithInstallment(t, monthIndex, year),
+                        amount: t.amount,
+                        date: t.date
+                    });
                     return sum + t.amount;
                 }
                 return sum;
@@ -1504,9 +1582,12 @@ function generateForecastData() {
         const variableExpenses = state.transactions
             .filter(t => t.type === 'variable_expense')
             .reduce((sum, t) => {
-                const tDate = new Date(t.date);
-                if (tDate.getMonth() === monthIndex && tDate.getFullYear() === year) {
-                    expenseItems.push({ name: t.name, amount: t.amount, date: t.date });
+                if (transactionAppliesForMonth(t, monthIndex, year)) {
+                    expenseItems.push({
+                        name: formatTransactionNameWithInstallment(t, monthIndex, year),
+                        amount: t.amount,
+                        date: t.date
+                    });
                     return sum + t.amount;
                 }
                 return sum;
@@ -1713,16 +1794,22 @@ function renderSettings() {
                     </button>
                 </div>
                 <div class="space-y-3">
-                    ${fixedExpenses.map(item => `
+                    ${fixedExpenses.map(item => {
+                        const cycleStart = getCycleDates().start;
+                        const installmentBadge = getInstallmentBadgeText(item, cycleStart.getMonth(), cycleStart.getFullYear());
+                        const displayName = installmentBadge ? `${item.name} (${installmentBadge})` : item.name;
+                        return `
                         <div onclick="renderTransactionModal(${JSON.stringify(item).replace(/"/g, '&quot;')})" class="bg-white p-4 rounded-2xl flex items-center justify-between shadow-sm border border-surface-variant/30 cursor-pointer active:scale-[0.98] transition-all">
                             <div class="flex items-center gap-4">
                                 <div class="w-10 h-10 rounded-full bg-rose-100 flex items-center justify-center text-rose-600">
                                     <span class="material-symbols-outlined">home</span>
                                 </div>
                                 <div>
-                                    <p class="font-bold">${item.name}</p>
+                                    <p class="font-bold">${displayName}</p>
                                     <div class="flex items-center gap-2">
-                                        <span class="px-2 py-0.5 bg-rose-50 text-rose-700 text-[10px] rounded-full font-bold">${((FREQUENCIES[item?.frequency]) || { label: 'חודשי' }).label}</span>
+                                        ${item.isInstallments && installmentBadge
+                                            ? `<span class="px-2 py-0.5 bg-blue-50 text-blue-700 text-[10px] rounded-full font-bold">תשלומים ${installmentBadge}</span>`
+                                            : `<span class="px-2 py-0.5 bg-rose-50 text-rose-700 text-[10px] rounded-full font-bold">${((FREQUENCIES[item?.frequency]) || { label: 'חודשי' }).label}</span>`}
                                         ${item.type === 'variable_expense' ? '<span class="px-2 py-0.5 bg-blue-50 text-blue-700 text-[10px] rounded-full font-bold">הוצאה משתנה מחזורית</span>' : ''}
                                         ${item.alert ? '<span class="px-2 py-0.5 bg-amber-50 text-amber-700 text-[10px] rounded-full font-bold">תזכורת פעילה</span>' : ''}
                                         ${item.isVariablePrice ? '<span class="px-2 py-0.5 bg-amber-50 text-amber-700 text-[10px] rounded-full font-bold">מחיר משתנה</span>' : ''}
@@ -1731,7 +1818,7 @@ function renderSettings() {
                             </div>
                             <p class="font-extrabold text-rose-600 text-lg">${formatCurrency(item.amount)}</p>
                         </div>
-                    `).join('')}
+                    `;}).join('')}
                 </div>
             </section>
 
@@ -2545,7 +2632,7 @@ function renderTransactionModal(transaction = null) {
                     </div>
                 </div>
 
-                <div id="frequency-section" class="${(transaction?.type?.startsWith('fixed') || (transaction?.type === 'variable_expense' && transaction?.isRecurring)) ? '' : 'hidden'} space-y-4">
+                <div id="frequency-section" class="${(!transaction?.isInstallments && (transaction?.type?.startsWith('fixed') || (transaction?.type === 'variable_expense' && transaction?.isRecurring))) ? '' : 'hidden'} space-y-4">
                     <div class="space-y-1">
                         <label class="text-xs font-bold text-on-surface-variant uppercase tracking-wider px-1">תדירות</label>
                         <select name="frequency" class="w-full h-14 px-4 rounded-2xl bg-surface-variant/30 border-2 border-transparent focus:border-primary focus:bg-white outline-none transition-all appearance-none">
@@ -2569,6 +2656,23 @@ function renderTransactionModal(transaction = null) {
                         <input type="checkbox" name="alert" ${transaction?.alert ? 'checked' : ''} class="w-5 h-5 rounded border-amber-300 text-amber-600 focus:ring-amber-400">
                         <span class="text-sm font-bold text-amber-800">להפעיל תזכורת בתאריך החודשי של ההוצאה</span>
                     </label>
+                </div>
+
+                <div id="installments-section" class="${(transaction?.type === 'fixed_expense' || transaction?.type === 'variable_expense') ? '' : 'hidden'} space-y-3 bg-blue-50/60 p-4 rounded-2xl border border-blue-100">
+                    <label class="flex items-center gap-3 cursor-pointer">
+                        <input type="checkbox" id="isInstallments" name="isInstallments" onchange="toggleFrequencyDisplay(document.getElementById('transaction-type').value)" ${transaction?.isInstallments ? 'checked' : ''} class="w-5 h-5 rounded border-blue-300 text-blue-600 focus:ring-blue-400">
+                        <span class="text-sm font-bold text-blue-900">זו הוצאה בתשלומים</span>
+                    </label>
+                    <div id="installments-details" class="${transaction?.isInstallments ? '' : 'hidden'} grid grid-cols-2 gap-3">
+                        <div class="space-y-1">
+                            <label class="text-xs font-bold text-blue-900/80 uppercase tracking-wider px-1">תאריך תשלום ראשון</label>
+                            <input type="date" name="installmentsStartDate" value="${transaction?.installmentsStartDate || transaction?.date || formatDateLocal(new Date())}" class="w-full h-12 px-3 rounded-xl bg-white border border-blue-100 focus:border-primary outline-none transition-all">
+                        </div>
+                        <div class="space-y-1">
+                            <label class="text-xs font-bold text-blue-900/80 uppercase tracking-wider px-1">מס׳ תשלומים</label>
+                            <input type="number" name="installmentsTotal" min="2" step="1" value="${transaction?.installmentsTotal || ''}" class="w-full h-12 px-3 rounded-xl bg-white border border-blue-100 focus:border-primary outline-none transition-all" placeholder="למשל 10">
+                        </div>
+                    </div>
                 </div>
 
                 <div class="flex items-center gap-2 py-2">
@@ -2597,20 +2701,33 @@ function renderTransactionModal(transaction = null) {
         const formData = new FormData(e.target);
         const type = formData.get('type');
         const isVariablePrice = formData.get('isVariablePrice') === 'on';
-        const isRecurring = formData.get('isRecurring') === 'on' || type.startsWith('fixed');
+        const isInstallments = (type === 'fixed_expense' || type === 'variable_expense') && formData.get('isInstallments') === 'on';
+        const installmentsTotal = isInstallments ? normalizeInstallmentsTotal(formData.get('installmentsTotal')) : 0;
+        const installmentsStartDate = isInstallments ? String(formData.get('installmentsStartDate') || formData.get('date') || formatDateLocal(new Date())) : '';
+
+        if (isInstallments && installmentsTotal < 2) {
+            alert('בהוצאה בתשלומים יש להזין לפחות 2 תשלומים.');
+            return;
+        }
+
+        const isRecurring = isInstallments || formData.get('isRecurring') === 'on' || type.startsWith('fixed');
+        const effectiveDate = isInstallments ? installmentsStartDate : String(formData.get('date'));
         
         const data = {
             id: transaction?.id || Date.now().toString(),
             name: formData.get('name'),
             amount: parseFloat(formData.get('amount')),
-            date: formData.get('date'),
+            date: effectiveDate,
             type: type,
             category: formData.get('category'),
             isRecurring: isRecurring,
-            frequency: isRecurring ? (formData.get('frequency') || transaction?.frequency || 'monthly') : '',
+            frequency: isInstallments ? 'monthly' : (isRecurring ? (formData.get('frequency') || transaction?.frequency || 'monthly') : ''),
             alert: (type === 'fixed_expense' || type === 'variable_expense') ? (formData.get('alert') === 'on') : false,
             isVariablePrice: (type === 'fixed_expense' || type === 'variable_expense') ? isVariablePrice : false,
             lastMonthAmount: (isVariablePrice && isEdit) ? transaction.amount : (transaction?.lastMonthAmount || 0),
+            isInstallments: isInstallments,
+            installmentsTotal: isInstallments ? installmentsTotal : '',
+            installmentsStartDate: isInstallments ? installmentsStartDate : '',
             desc: formData.get('name'),
             goalId: transaction?.goalId || '',
             cycleDate: transaction?.cycleDate || ''
@@ -2618,15 +2735,24 @@ function renderTransactionModal(transaction = null) {
         
         handleSaveTransaction(data, isEdit);
     };
+
+    const typeSelect = document.getElementById('transaction-type');
+    if (typeSelect) {
+        toggleFrequencyDisplay(typeSelect.value);
+    }
 }
 
 function toggleFrequencyDisplay(type) {
     const freqSection = document.getElementById('frequency-section');
     const varPriceSection = document.getElementById('variable-price-section');
     const reminderSection = document.getElementById('expense-reminder-section');
+    const installmentsSection = document.getElementById('installments-section');
     const isRecurringCheckbox = document.getElementById('isRecurring');
+    const isInstallmentsCheckbox = document.getElementById('isInstallments');
 
-    const shouldShowFrequency = type.startsWith('fixed') || (type === 'variable_expense' && isRecurringCheckbox && isRecurringCheckbox.checked);
+    const isExpenseType = type === 'fixed_expense' || type === 'variable_expense';
+    const installmentsChecked = !!(isInstallmentsCheckbox && isInstallmentsCheckbox.checked);
+    const shouldShowFrequency = !installmentsChecked && (type.startsWith('fixed') || (type === 'variable_expense' && isRecurringCheckbox && isRecurringCheckbox.checked));
 
     if (shouldShowFrequency) {
         freqSection.classList.remove('hidden');
@@ -2639,13 +2765,38 @@ function toggleFrequencyDisplay(type) {
     }
 
     if (varPriceSection) {
-        if (type === 'fixed_expense' || type === 'variable_expense') varPriceSection.classList.remove('hidden');
+        if (isExpenseType) varPriceSection.classList.remove('hidden');
         else varPriceSection.classList.add('hidden');
     }
 
     if (reminderSection) {
-        if (type === 'fixed_expense' || type === 'variable_expense') reminderSection.classList.remove('hidden');
+        if (isExpenseType) reminderSection.classList.remove('hidden');
         else reminderSection.classList.add('hidden');
+    }
+
+    if (installmentsSection) {
+        if (isExpenseType) installmentsSection.classList.remove('hidden');
+        else installmentsSection.classList.add('hidden');
+    }
+
+    if (!isExpenseType && isInstallmentsCheckbox) {
+        isInstallmentsCheckbox.checked = false;
+    }
+
+    toggleInstallmentsDetails();
+}
+
+function toggleInstallmentsDetails() {
+    const isInstallmentsCheckbox = document.getElementById('isInstallments');
+    const details = document.getElementById('installments-details');
+    const frequencySection = document.getElementById('frequency-section');
+    if (!details || !isInstallmentsCheckbox) return;
+
+    if (isInstallmentsCheckbox.checked) {
+        details.classList.remove('hidden');
+        if (frequencySection) frequencySection.classList.add('hidden');
+    } else {
+        details.classList.add('hidden');
     }
 }
 function handleSaveTransaction(data, isEdit) {

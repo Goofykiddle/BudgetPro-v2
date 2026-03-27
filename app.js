@@ -2165,6 +2165,15 @@ function applyActionResultLocally(action, result, payload) {
     }
 
     if (result.state && result.state.ok) {
+        if (action && action !== 'replaceAllData' && action !== 'syncAll' && action !== 'saveSetup' && action !== 'clearAllData') {
+            const s = result.state || {};
+            const looksEmptyState = Array.isArray(s.transactions) && Array.isArray(s.savingsGoals) && Array.isArray(s.accountBalances)
+                && s.transactions.length === 0 && s.savingsGoals.length === 0 && s.accountBalances.length === 0;
+            if (looksEmptyState) {
+                console.warn('[SYNC_GUARD] Ignoring suspicious empty bootstrap payload on action:', action, result);
+                return true;
+            }
+        }
         // Fallback for older backend payloads that still return full state.
         // Action-specific handlers above intentionally win to avoid accidental
         // state wipe from malformed legacy bootstrap responses.
@@ -2247,11 +2256,20 @@ async function saveDataToGAS(action, data, options = {}) {
             const parseStart = perfNow();
             const result = await response.json();
             perfLog('saveDataToGAS parseJSON', parseStart, `action=${action}`);
+            console.log('[DEBUG] saveDataToGAS result', {
+                action,
+                hasState: !!(result && result.state),
+                hasDeletedId: !!(result && result.deletedId),
+                hasTransaction: !!(result && result.transaction),
+                ok: !!(result && result.ok),
+                keys: result ? Object.keys(result) : []
+            });
             if (applyActionResultLocally(action, result, data)) {
                 render();
             } else {
-                // Fallback for unexpected backend payload shape.
-                await fetchDataFromGAS({ showLoading: false });
+                console.warn('[SYNC_GUARD] Unexpected save response shape, keeping local state:', action, result);
+                // Keep optimistic local state and avoid destructive full sync.
+                render();
             }
         } catch (error) {
             console.error('Error saving data:', error);

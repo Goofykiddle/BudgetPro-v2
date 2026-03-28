@@ -226,13 +226,23 @@ function getInstallmentStatus(transaction, monthIndex, year) {
 function getInstallmentBadgeText(transaction, monthIndex, year) {
     const status = getInstallmentStatus(transaction, monthIndex, year);
     if (!status.enabled || !status.active) return '';
-    return `${status.index}/${status.total}`;
+    return `${status.index} מתוך ${status.total}`;
 }
 
 function formatTransactionNameWithInstallment(transaction, monthIndex, year) {
     const badge = getInstallmentBadgeText(transaction, monthIndex, year);
     if (!badge) return String(transaction?.name || '');
     return `${String(transaction?.name || '')} (${badge})`;
+}
+
+function compareTransactionsByDateDesc(a, b) {
+    const aTime = parseDateLocal(a?.date).getTime();
+    const bTime = parseDateLocal(b?.date).getTime();
+    if (bTime !== aTime) return bTime - aTime;
+
+    const aId = String(a?.id || '');
+    const bId = String(b?.id || '');
+    return bId.localeCompare(aId, 'en', { numeric: true, sensitivity: 'base' });
 }
 
 function getGoalRemainingMonths(goal) {
@@ -854,7 +864,7 @@ function renderHome() {
                 <div class="flex gap-3 overflow-x-auto no-scrollbar pb-2 -mx-4 px-4">
                     ${(() => {
                         const recentTransactions = [...currentTransactions]
-                            .sort((a, b) => new Date(b.date) - new Date(a.date))
+                            .sort(compareTransactionsByDateDesc)
                             .slice(0, 7);
                             
                         return recentTransactions.map(t => {
@@ -863,7 +873,7 @@ function renderHome() {
                             const amountSign = isExpense ? '-' : '';
                             const tDate = parseDateLocal(t.date);
                             const installmentBadge = getInstallmentBadgeText(t, tDate.getMonth(), tDate.getFullYear());
-                            const displayName = installmentBadge ? `${t.name} (${installmentBadge})` : t.name;
+                            const displayName = t.name;
                             
                             return `
                                 <div onclick="renderTransactionModal(${JSON.stringify(t).replace(/"/g, '&quot;')})" class="min-w-[150px] bg-white rounded-2xl p-3 border border-surface-variant/30 shadow-sm flex flex-col gap-2 cursor-pointer hover:scale-[1.02] transition-transform">
@@ -871,7 +881,10 @@ function renderHome() {
                                         <div class="w-8 h-8 rounded-full ${colorClass} flex items-center justify-center">
                                             <span class="material-symbols-outlined text-sm">${TRANSACTION_TYPES[t.type]?.icon || 'receipt_long'}</span>
                                         </div>
-                                        <span class="text-xs text-on-surface-variant font-medium">${t.date.split('-').slice(1).reverse().join('/')}</span>
+                                        <div class="flex items-center gap-1.5">
+                                            ${installmentBadge ? `<span class="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-blue-50 text-blue-700">תשלומים ${installmentBadge}</span>` : ''}
+                                            <span class="text-xs text-on-surface-variant font-medium">${t.date.split('-').slice(1).reverse().join('/')}</span>
+                                        </div>
                                     </div>
                                     <div>
                                         <h4 class="font-bold text-sm truncate">${displayName}</h4>
@@ -1057,10 +1070,10 @@ function renderTransactions() {
 
             <!-- Transaction List -->
             <div class="space-y-4">
-                ${categoryFiltered.length > 0 ? categoryFiltered.sort((a, b) => new Date(b.date) - new Date(a.date)).map(t => {
+                ${categoryFiltered.length > 0 ? categoryFiltered.sort(compareTransactionsByDateDesc).map(t => {
                     const tDate = parseDateLocal(t.date);
                     const installmentBadge = getInstallmentBadgeText(t, tDate.getMonth(), tDate.getFullYear());
-                    const displayName = installmentBadge ? `${t.name} (${installmentBadge})` : t.name;
+                    const displayName = t.name;
                     return `
                     <div onclick="renderTransactionModal(${JSON.stringify(t).replace(/"/g, '&quot;')})" class="bg-white p-5 rounded-3xl flex items-center justify-between shadow-sm border border-surface-variant/10 active:scale-[0.98] transition-all cursor-pointer">
                         <div class="flex items-center gap-4">
@@ -1073,6 +1086,7 @@ function renderTransactions() {
                                     <span class="text-xs font-bold text-on-surface-variant uppercase opacity-70">${t.category || 'כללי'}</span>
                                     <span class="w-1 h-1 bg-surface-variant rounded-full"></span>
                                     <span class="text-xs font-bold text-on-surface-variant opacity-70">${t.date}</span>
+                                    ${installmentBadge ? `<span class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-50 text-blue-700">תשלומים ${installmentBadge}</span>` : ''}
                                 </div>
                             </div>
                         </div>
@@ -1080,9 +1094,7 @@ function renderTransactions() {
                             <p class="font-black text-lg ${t.type === 'savings_deposit' ? 'text-blue-600' : (t.type.includes('income') ? 'text-emerald-600' : 'text-rose-600')}">
                                 ${t.type.includes('income') ? '' : '-'}${formatCurrency(t.amount)}
                             </p>
-                            ${t.isInstallments && installmentBadge
-                                ? `<span class="text-[8px] font-bold bg-blue-50 text-blue-700 px-1.5 py-0.5 rounded-full uppercase tracking-tighter">תשלומים ${installmentBadge}</span>`
-                                : (t.isRecurring ? '<span class="text-[8px] font-bold bg-surface-variant/30 px-1.5 py-0.5 rounded-full uppercase tracking-tighter">קבוע</span>' : '')}
+                            ${(!t.isInstallments && t.isRecurring) ? '<span class="text-[8px] font-bold bg-surface-variant/30 px-1.5 py-0.5 rounded-full uppercase tracking-tighter">קבוע</span>' : ''}
                         </div>
                     </div>
                 `;}).join('') : `
@@ -1146,29 +1158,22 @@ function renderSavings() {
     return `
         <div class="space-y-8 pb-10">
             <!-- Summary Section -->
-            <section class="bg-white p-8 rounded-3xl border border-surface-variant/30 shadow-sm space-y-8 relative overflow-hidden">
-                <div class="absolute top-0 right-0 w-64 h-64 bg-primary/5 rounded-full -mr-20 -mt-20 blur-3xl"></div>
-                
-                <div class="relative z-10 text-center space-y-2">
-                    <span class="text-on-surface-variant font-bold text-xs uppercase tracking-widest">סה״כ נחסך</span>
-                    <div class="flex flex-col items-center gap-2">
-                        <h2 class="text-4xl font-black text-primary tracking-tighter">${formatCurrency(totalCurrent, false)}</h2>
-                        <div class="flex items-center gap-2">
-                            <span class="text-primary font-bold text-xs bg-primary-container px-3 py-1 rounded-full shadow-sm">
-                                ${totalTarget > 0 ? Math.round((totalCurrent / totalTarget) * 100) : 0}% מהיעד הכולל
-                            </span>
-                        </div>
-                    </div>
-                </div>
+            <section class="bg-primary rounded-3xl p-6 text-on-primary shadow-lg shadow-primary/20 relative overflow-hidden mt-4">
+                <div class="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full -mr-16 -mt-16 blur-2xl"></div>
+                <div class="relative z-10">
+                    <p class="text-sm opacity-80 mb-1">סה״כ נחסך</p>
+                    <h2 class="text-4xl font-black mb-1 tracking-tighter">${formatCurrency(totalCurrent, false)}</h2>
+                    <p class="text-[10px] opacity-70 mb-6">${totalTarget > 0 ? Math.round((totalCurrent / totalTarget) * 100) : 0}% מהיעד הכולל</p>
 
-                <div class="relative z-10 grid grid-cols-2 gap-0 pt-6 border-t border-surface-variant/30">
-                    <div class="flex flex-col items-center border-l border-surface-variant/30">
-                        <p class="text-primary font-bold text-[10px] uppercase tracking-widest mb-1 opacity-70">הוקצה החודש</p>
-                        <h3 class="text-2xl font-extrabold text-primary tracking-tighter">${formatCurrency(monthlySavings, false)}</h3>
-                    </div>
-                    <div class="flex flex-col items-center">
-                        <p class="text-on-surface-variant font-bold text-[10px] uppercase tracking-widest mb-1 opacity-70">נותר ליעד</p>
-                        <h3 class="text-2xl font-extrabold text-on-surface tracking-tighter">${formatCurrency(totalRemaining, false)}</h3>
+                    <div class="grid grid-cols-2 gap-4">
+                        <div class="bg-white/10 rounded-2xl p-3 backdrop-blur-sm">
+                            <p class="text-[10px] opacity-80 uppercase tracking-wider mb-1">הוקצה החודש</p>
+                            <p class="text-2xl font-extrabold tracking-tighter">${formatCurrency(monthlySavings, false)}</p>
+                        </div>
+                        <div class="bg-white/10 rounded-2xl p-3 backdrop-blur-sm">
+                            <p class="text-[10px] opacity-80 uppercase tracking-wider mb-1">נותר ליעד</p>
+                            <p class="text-2xl font-extrabold tracking-tighter">${formatCurrency(totalRemaining, false)}</p>
+                        </div>
                     </div>
                 </div>
             </section>
@@ -1407,7 +1412,10 @@ function renderForecast() {
                                                     <span class="font-bold text-[10px] text-rose-600">${formatCurrency(-ei.amount)}</span>
                                                     <div class="text-right">
                                                         <p class="font-bold text-[9px] leading-tight">${ei.name}</p>
-                                                        <p class="text-[8px] text-on-surface-variant opacity-60">${ei.date.split('-').reverse().slice(0,2).join('/')}</p>
+                                                        <div class="flex items-center gap-1 justify-end">
+                                                            ${ei.installmentBadge ? `<span class="text-[8px] font-bold px-1.5 py-0.5 rounded-full bg-blue-50 text-blue-700">תשלומים ${ei.installmentBadge}</span>` : ''}
+                                                            <p class="text-[8px] text-on-surface-variant opacity-60">${ei.date.split('-').reverse().slice(0,2).join('/')}</p>
+                                                        </div>
                                                     </div>
                                                 </div>
                                             `).join('') : '<p class="text-[9px] text-on-surface-variant italic">אין הוצאות החודש</p>'}
@@ -1568,8 +1576,10 @@ function generateForecastData() {
             .filter(t => t.type === 'fixed_expense')
             .reduce((sum, t) => {
                 if (transactionAppliesForMonth(t, monthIndex, year)) {
+                    const installmentBadge = getInstallmentBadgeText(t, monthIndex, year);
                     expenseItems.push({
-                        name: formatTransactionNameWithInstallment(t, monthIndex, year),
+                        name: t.name,
+                        installmentBadge: installmentBadge,
                         amount: t.amount,
                         date: t.date
                     });
@@ -1583,8 +1593,10 @@ function generateForecastData() {
             .filter(t => t.type === 'variable_expense')
             .reduce((sum, t) => {
                 if (transactionAppliesForMonth(t, monthIndex, year)) {
+                    const installmentBadge = getInstallmentBadgeText(t, monthIndex, year);
                     expenseItems.push({
-                        name: formatTransactionNameWithInstallment(t, monthIndex, year),
+                        name: t.name,
+                        installmentBadge: installmentBadge,
                         amount: t.amount,
                         date: t.date
                     });
@@ -1797,7 +1809,7 @@ function renderSettings() {
                     ${fixedExpenses.map(item => {
                         const cycleStart = getCycleDates().start;
                         const installmentBadge = getInstallmentBadgeText(item, cycleStart.getMonth(), cycleStart.getFullYear());
-                        const displayName = installmentBadge ? `${item.name} (${installmentBadge})` : item.name;
+                        const displayName = item.name;
                         return `
                         <div onclick="renderTransactionModal(${JSON.stringify(item).replace(/"/g, '&quot;')})" class="bg-white p-4 rounded-2xl flex items-center justify-between shadow-sm border border-surface-variant/30 cursor-pointer active:scale-[0.98] transition-all">
                             <div class="flex items-center gap-4">

@@ -1162,17 +1162,17 @@ function renderSavings() {
                 <div class="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full -mr-16 -mt-16 blur-2xl"></div>
                 <div class="relative z-10">
                     <p class="text-sm opacity-80 mb-1">סה״כ נחסך</p>
-                    <h2 class="text-4xl font-black mb-1 tracking-tighter">${formatCurrency(totalCurrent, false)}</h2>
+                    <h2 class="text-3xl font-bold mb-1">${formatCurrency(totalCurrent, false)}</h2>
                     <p class="text-[10px] opacity-70 mb-6">${totalTarget > 0 ? Math.round((totalCurrent / totalTarget) * 100) : 0}% מהיעד הכולל</p>
 
                     <div class="grid grid-cols-2 gap-4">
                         <div class="bg-white/10 rounded-2xl p-3 backdrop-blur-sm">
                             <p class="text-[10px] opacity-80 uppercase tracking-wider mb-1">הוקצה החודש</p>
-                            <p class="text-2xl font-extrabold tracking-tighter">${formatCurrency(monthlySavings, false)}</p>
+                            <p class="text-lg font-bold">${formatCurrency(monthlySavings, false)}</p>
                         </div>
                         <div class="bg-white/10 rounded-2xl p-3 backdrop-blur-sm">
                             <p class="text-[10px] opacity-80 uppercase tracking-wider mb-1">נותר ליעד</p>
-                            <p class="text-2xl font-extrabold tracking-tighter">${formatCurrency(totalRemaining, false)}</p>
+                            <p class="text-lg font-bold">${formatCurrency(totalRemaining, false)}</p>
                         </div>
                     </div>
                 </div>
@@ -1412,10 +1412,7 @@ function renderForecast() {
                                                     <span class="font-bold text-[10px] text-rose-600">${formatCurrency(-ei.amount)}</span>
                                                     <div class="text-right">
                                                         <p class="font-bold text-[9px] leading-tight">${ei.name}</p>
-                                                        <div class="flex items-center gap-1 justify-end">
-                                                            ${ei.installmentBadge ? `<span class="text-[8px] font-bold px-1.5 py-0.5 rounded-full bg-blue-50 text-blue-700">תשלומים ${ei.installmentBadge}</span>` : ''}
-                                                            <p class="text-[8px] text-on-surface-variant opacity-60">${ei.date.split('-').reverse().slice(0,2).join('/')}</p>
-                                                        </div>
+                                                        <p class="text-[8px] text-on-surface-variant opacity-60">${ei.date.split('-').reverse().slice(0,2).join('/')} ${ei.installmentBadge ? `• תשלומים ${ei.installmentBadge}` : ''}</p>
                                                     </div>
                                                 </div>
                                             `).join('') : '<p class="text-[9px] text-on-surface-variant italic">אין הוצאות החודש</p>'}
